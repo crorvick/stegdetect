@@ -1,0 +1,94 @@
+.\"	$OpenBSD: mdoc.template,v 1.6 2001/02/03 08:22:44 niklas Exp $
+.\"
+.\" The following requests are required for all man pages.
+.Dd April 01, 2001
+.Dt STEGDETECT 1
+.Os
+.Sh NAME
+.Nm stegdetect
+.Nd finds image files with steganographic content
+.Sh SYNOPSIS
+.\" For a program:  program [-abc] file ...
+.Nm stegdetect
+.Op Fl V
+.Op Fl s Ar float
+.Op Fl d Ar num
+.Op Fl t Ar tests
+.Ar file ...
+.Sh DESCRIPTION
+The
+.Nm
+utility analyses image files for steganographic content.  It runs
+statistical tests to determine if steganographic content is present,
+and also tries to find the system that has been used to embed the
+hidden information.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds_tests
+.It Fl V
+Displays the version number of the software.
+.It Fl s Ar float
+Changes the sensitivity of the detection algorithms.  Their results
+are multiplied by the specified number.  The higher the number the
+more sensitive the test will become.  The default is 1.
+.It Fl d Ar num
+Prints debug information.
+.It Fl t Ar tests
+Sets the tests that are being run on the image.  The following characters
+are understood:
+.Bl -tag -width Ds
+.It j
+Tests if information has been embedded with
+.Tn jsteg .
+.It o
+Tests if information has been embedded with
+.Tn outguess .
+.It p
+Tests if information has been embedded with
+.Tn jphide .
+.El
+.Pp
+The default value is
+.Va jop .
+.El
+.Pp
+The
+.Nm
+utility indicates the accuracy of the detection with a number of stars
+behind the detected system.
+.\" The following requests should be uncommented and used where appropriate.
+.Sh EXAMPLES
+.Cm stegdetect -t p auto.jpg
+.Pp
+Tries to detect the presence of
+.Tn jphide
+embedded information in
+.Fa auto.jpg .
+.\" This next request is for sections 2 and 3 function return values only.
+.\" .Sh RETURN VALUES
+.\" The next request is for sections 2 and 3 error and signal handling only.
+.Sh ERRORS
+.Nm
+works only for
+.Tn JPEG
+images.
+.Pp
+Currently, there is no support for parameter training.  The only exported
+knob is the sensitivity level.  Future versions will export all detection
+parameters via a configuration file.
+.\" This next request is for section 4 only.
+.\" .Sh DIAGNOSTICS
+.\" This next request is for sections 1, 6, 7 & 8 only.
+.\" .Sh ENVIRONMENT
+.\" .Sh FILES
+.\" .Sh SEE ALSO
+.\" .Xr foobar 1
+.\" .Sh COMPATIBILITY
+.\" .Sh STANDARDS
+.Sh AUTHORS
+The
+.Nm
+utility has been developed by Niels Provos.
+.\" .Sh HISTORY
+.\" .Sh BUGS
+.\" .Sh CAVEATS

@@ -1,0 +1,43 @@
+# stegdetect 0.1 Makefile (c) 2001 Niels Provos
+
+srcdir		= @srcdir@
+VPATH		= @srcdir@
+
+install_prefix	=
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+bindir		= @bindir@
+mandir		= @mandir@
+
+JPEGINC		= @JPEGINC@
+JPEGLIB		= @JPEGLIB@
+
+CC		= @CC@
+CFLAGS		= -Wall @CFLAGS@ $(JPEGINC)
+LDFLAGS		= @LDFLAGS@
+LIBS		= $(JPEGLIB)
+
+INSTALL		= @INSTALL@
+INSTALL_PROG	= @INSTALL_PROGRAM@
+INSTALL_DATA	= @INSTALL_DATA@
+
+SRCS=		stegdetect.o chi2cdf.o
+OBJS=		$(SRCS:.c=.o) @LIBOBJS@
+
+all: stegdetect
+
+stegdetect: $(OBJS)
+	$(CC) $(CFLAGS) $(INCS) -o $@ $(OBJS) $(LIBS)
+
+install: all
+	$(INSTALL_PROG) -m 755 stegdetect $(install_prefix)$(bindir)
+	$(INSTALL_DATA) stegdetect.1 $(install_prefix)$(mandir)/man1
+
+clean:
+	rm -f stegdetect *~ $(OBJS)
+
+distclean: clean
+	rm -f Makefile config.h config.status config.cache config.log
+
+strlcat.o: $(srcdir)/missing/strlcat.c
+	$(CC) $(CFLAGS) -c $(srcdir)/missing/strlcat.c
