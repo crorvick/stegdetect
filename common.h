@@ -35,12 +35,12 @@ void jpg_finish(void);
 void jpg_destroy(void);
 int jpg_open(char *);
 
-void prepare_all(short **, int *);
-void prepare_normal(short **, int *);
-void prepare_jphide(short **, int *);
-void prepare_jsteg(short **, int *);
+int prepare_all(short **, int *);
+int prepare_normal(short **, int *);
+int prepare_jphide(short **, int *);
+int prepare_jsteg(short **, int *);
 int jsteg_size(short *, int, int *);
-void prepare_outguess(short **, int *);
+int prepare_outguess(short **, int *);
 
 char *fgetl(char *, int, FILE *);
 int file_hasextension(char *, char *);

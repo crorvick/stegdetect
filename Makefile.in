@@ -14,6 +14,11 @@ JPEGINC		= -I$(JPEGDIR)
 JPEGLIB		= -L$(JPEGDIR) -ljpeg
 JPEGDEP		= $(JPEGDIR)/libjpeg.a
 
+GTKINC		= @GTKINC@
+GTKLIB		= @GTKLIB@
+EVENTINC	= @EVENTINC@
+EVENTLIB	= @EVENTLIB@
+
 CC		= @CC@
 CFLAGS		= -Wall @CFLAGS@ $(JPEGINC) -I$(srcdir)/missing
 LDFLAGS		= @LDFLAGS@
@@ -26,21 +31,39 @@ INSTALL_DATA	= @INSTALL_DATA@
 CSRCS=		common.c jphide_table.c
 DSRCS=		stegdetect.c chi2cdf.c
 DOBJS=		$(DSRCS:.c=.o) $(CSRCS:.c=.o) @LIBOBJS@
+XSSRCS=		xsteg.c xsteg_xpm.c
+XSOBJS=		$(XSSRCS:.c=.o)
 
-all: stegdetect
+PROGS=		stegdetect @XSTEG@
+
+all: $(PROGS)
 
 stegdetect: $(JPEGDEP) $(DOBJS)
 	$(CC) $(CFLAGS) $(INCS) -o $@ $(DOBJS) $(LIBS)
+
+$(XSOBJS):
+	$(CC) $(CFLAGS) $(EVENTINC) $(GTKINC) -c $*.c
+
+xsteg:	$(XSOBJS) @LIBOBJS@
+	$(CC) $(CFLAGS) $(INCS) -o $@ @LIBOBJS@ $(XSOBJS) $(GTKLIB) $(EVENTLIB)
 
 $(JPEGDEP):
 	cd $(JPEGDIR); $(MAKE) libjpeg.a
 
 install: all
-	$(INSTALL_PROG) -m 755 stegdetect $(install_prefix)$(bindir)
-	$(INSTALL_DATA) stegdetect.1 $(install_prefix)$(mandir)/man1
+	test -d $(install_prefix)$(bindir) || \
+	   $(INSTALL) -d $(install_prefix)$(bindir)
+	for file in $(PROGS); do \
+	   $(INSTALL_PROG) -m 755 $$file $(install_prefix)$(bindir); \
+	done
+	test -d $(install_prefix)$(mandir)/man1 || \
+	   $(INSTALL) -d $(install_prefix)$(mandir)/man1
+	for file in *.1; do \
+	   $(INSTALL_DATA) $$file $(install_prefix)$(mandir)/man1; \
+	done
 
 clean:
-	rm -f stegdetect *~ $(DOBJS)
+	rm -f $(PROGS) *~ $(DOBJS) $(BOBJS) $(POBJS) $(XSOBJS)
 
 distclean: clean
 	cd $(JPEGDIR); $(MAKE) $@

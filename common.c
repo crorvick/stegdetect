@@ -197,7 +197,7 @@ jsteg_cb(int where, short val)
 	(*pjbits)++;
 }
 
-void
+int
 prepare_jsteg(short **pdcts, int *pbits)
 {
 	pjdcts = pdcts;
@@ -206,6 +206,8 @@ prepare_jsteg(short **pdcts, int *pbits)
 	stego_set_callback(jsteg_cb, ORDER_MCU);
 	*pdcts = cbdcts = NULL;
 	ncbbits = *pjbits = 0;
+
+	return (0);
 }
 
 short **podcts, *cbodcts;
@@ -237,7 +239,7 @@ outguess_cb(int where, short val)
 	(*pobits)++;
 }
 
-void
+int
 prepare_outguess(short **pdcts, int *pbits)
 {
 	podcts = pdcts;
@@ -246,9 +248,11 @@ prepare_outguess(short **pdcts, int *pbits)
 	stego_set_callback(outguess_cb, ORDER_NATURAL);
 	*pdcts = cbodcts = NULL;
 	ncbobits = *pobits = 0;
+
+	return (0);
 }
 
-void
+int
 prepare_all(short **pdcts, int *pbits)
 {
 	int comp, row, col, val, bits, i;
@@ -259,8 +263,10 @@ prepare_all(short **pdcts, int *pbits)
 		bits += hib[comp] * wib[comp] * DCTSIZE2;
 
 	dcts = malloc(bits * sizeof (short));
-	if (dcts == NULL)
-		err(1, "malloc");
+	if (dcts == NULL) {
+		warn(__FUNCTION__": malloc");
+		return (-1);
+	}
 
 	bits = 0;
 	for (comp = 0; comp < 3; comp++) 
@@ -274,6 +280,8 @@ prepare_all(short **pdcts, int *pbits)
 
 	*pdcts = dcts;
 	*pbits = bits;
+
+	return (0);
 }
 
 int
@@ -308,7 +316,7 @@ jsteg_size(short *dcts, int bits, int *off)
 	return (len);
 }
 
-void
+int
 prepare_normal(short **pdcts, int *pbits)
 {
 	int comp, row, col, val, bits, i;
@@ -320,8 +328,10 @@ prepare_normal(short **pdcts, int *pbits)
 
 	if (pdcts != NULL) {
 		dcts = malloc(bits * sizeof (short));
-		if (dcts == NULL)
-			err(1, "malloc");
+		if (dcts == NULL) {
+			warn(__FUNCTION__": malloc");
+			return (-1);
+		}
 	}
 	
 	bits = 0;
@@ -343,9 +353,11 @@ prepare_normal(short **pdcts, int *pbits)
 	if (pdcts != NULL)
 		*pdcts = dcts;
 	*pbits = bits;
+
+	return (0);
 }
 
-void
+int
 prepare_jphide(short **pdcts, int *pbits)
 {
 	int comp, val, bits, i, mbits;
@@ -364,14 +376,18 @@ prepare_jphide(short **pdcts, int *pbits)
 
 		/* XXX - wasteful */
 		back[comp] = calloc(off, sizeof (char));
-		if (back[comp] == NULL)
-			err(1, "calloc");
+		if (back[comp] == NULL) {
+			warn(__FUNCTION__": calloc");
+			goto err;
+		}
 	}
 
 	if (pdcts != NULL) {
 		dcts = malloc(mbits * sizeof (short));
-		if (dcts == NULL)
-			err(1, "malloc");
+		if (dcts == NULL) {
+			warn(__FUNCTION__": malloc");
+			goto err;
+		}
 	}
 
 	comp = ltab[0];
@@ -418,6 +434,13 @@ prepare_jphide(short **pdcts, int *pbits)
 	if (pdcts != NULL)
 		*pdcts = dcts;
 	*pbits = bits;
+
+	return (0);
+ err:
+	for (i = 0; i < 3; i++)
+		if (back[i] != NULL)
+			free(back[i]);
+	return (-1);
 }
 
 struct my_error_mgr {

@@ -881,8 +881,7 @@ detect(char *filename, int scans)
 	jsteg_error:
 	}
 
-	if (scans & FLAG_DOOUTGUESS) {
-		prepare_normal(&dcts, &bits);
+	if ((scans & FLAG_DOOUTGUESS) && prepare_normal(&dcts, &bits) != -1) {
 		res = histogram_chi_outguess(dcts, bits);
 		if (res) {
 			strlcat(outbuf, quality(" outguess(old)", res),
@@ -892,8 +891,7 @@ detect(char *filename, int scans)
 		free(dcts);
 	}
 
-	if (scans & FLAG_DOJPHIDE) {
-		prepare_jphide(&dcts, &bits);
+	if ((scans & FLAG_DOJPHIDE) && prepare_jphide(&dcts, &bits) != -1) {
 		res = histogram_chi_jphide(dcts, bits);
 		if (res) {
 			strlcat(outbuf, quality(" jphide", res),
