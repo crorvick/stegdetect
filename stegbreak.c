@@ -39,8 +39,10 @@
 #include <err.h>
 #include <string.h>
 #include <signal.h>
+#include <dirent.h>
 
 #include <jpeglib.h>
+#include <file.h>
 
 #include "config.h"
 #include "common.h"
@@ -51,7 +53,11 @@
 #include "break_jsteg.h"
 #include "db.h"
 
-#define VERSION "0.2"
+#define VERSION "0.4"
+
+#ifndef PATH_MAX
+#define PATH_MAX	1024
+#endif
 
 #define FLAG_DOOUTGUESS	0x0001
 #define FLAG_DOJPHIDE	0x0002
@@ -59,6 +65,7 @@
 
 char *rules_name;
 char *progname;
+char *wordlist = "/usr/share/dict/words";
 
 int convert = 0;
 int quiet = 0;
@@ -67,7 +74,7 @@ int signaled = 0;
 FILE *word_file;
 int line_number, rule_number, rule_count;
 
-int count, total_count;
+u_int32_t count, total_count;
 int found = 0;
 struct timeval last_tv;
 time_t starttime;
@@ -332,7 +339,7 @@ jsteg_read_jpg(char *filename)
 		return (NULL);
 	}
 
-	obj = break_jsteg_prepare(dcts, bits);
+	obj = break_jsteg_prepare(filename, dcts, bits);
 		
 	if (dcts != NULL)
 		free(dcts);
@@ -382,6 +389,7 @@ int
 doinsert(char *filename, int scans)
 {
 	struct handler *handle;
+	int res = 0;
 	void *obj;
 
 	if (!file_hasextension(filename, ".jpg") &&
@@ -402,11 +410,13 @@ doinsert(char *filename, int scans)
 		    handle->obj_crack, handle->obj_compare,
 		    handle->obj_destroy);
 	} else {
+		res = -1;
+
 		for (handle = &handlers[0]; handle->extension; handle++) {
 			if (scans & handle->type) {
 				obj = handle->obj_read_jpg(filename);
 				if (obj == NULL)
-					return (-1);
+					continue;
 
 				if (convert)
 					doconvert(filename, handle->extension,
@@ -418,14 +428,40 @@ doinsert(char *filename, int scans)
 					    handle->obj_crack,
 					    handle->obj_compare,
 					    handle->obj_destroy);
+
+				res = 0;
 			}
 		}
 	}
 
-	return (0);
+	return (res);
 }
 
 #define MAX_FILES 1024
+
+void
+process_loop(char *name, int scans, int *pi, int *pn)
+{
+	int i, n;
+
+	i = *pi;
+	n = *pn;
+
+	if (doinsert(name, scans) != -1) {
+		i++;
+		n++;
+	}
+
+	if (!convert && i >= MAX_FILES) {
+		fprintf(stderr, "Loaded %i files...\n",
+		    i);
+		do_wordlist_crack(wordlist);
+		i = 0;
+	}
+
+	*pi = i;
+	*pn = n;
+}
 
 int
 main(int argc, char *argv[])
@@ -433,13 +469,12 @@ main(int argc, char *argv[])
 	int i, n, scans;
 	extern char *optarg;
 	extern int optind;
-	char *wordlist = "/usr/share/dict/words";
-	char ch;
+	int ch;
 
 	rules_name = RULES_NAME;
 	progname = argv[0];
 
-	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG;
+	scans = FLAG_DOJPHIDE;
 
 	/* read command line arguments */
 	while ((ch = getopt(argc, argv, "cqs:f:r:Vd:t:")) != -1)
@@ -490,6 +525,10 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
+	/* Set up magic rules */
+	if (file_init())
+		errx(1, "file magic initializiation failed");
+
         if (!convert) {
 		cfg_init(rules_name);
 		db_init();
@@ -503,17 +542,48 @@ main(int argc, char *argv[])
 	
 	n = i = 0;
 	while (argc) {
-		if (doinsert(argv[0], scans) != -1) {
-			i++;
-			n++;
-		}
+		struct stat sb;
 
-		if (!convert && i >= MAX_FILES) {
-			fprintf(stderr, "Loaded %i files...\n", i);
-			do_wordlist_crack(wordlist);
-			i = 0;
-		}
+		if (stat(argv[0], &sb) == -1)
+			goto end;
+		if (sb.st_mode & S_IFDIR) {
+			DIR *dir;
+			struct dirent *file;
+			char fullname[PATH_MAX];
+			int off;
 
+			if (strlen(argv[0]) >= sizeof (fullname) - 2) {
+				warnx("%s: directory name too long", argv[0]);
+				goto end;
+			}
+
+			if ((dir = opendir(argv[0])) == NULL) {
+				warn("%s", argv[0]);
+				goto end;
+			}
+
+			strlcpy(fullname, argv[0], sizeof (fullname));
+			off = strlen(fullname);
+			if (fullname[off - 1] != '/') {
+				strlcat(fullname, "/", sizeof(fullname));
+				off++;
+			}
+			
+			while ((file = readdir(dir)) != NULL) {
+				if (!strcmp(file->d_name, ".") ||
+				    !strcmp(file->d_name, ".."))
+					continue;
+
+				strlcpy(fullname + off, file->d_name,
+				    sizeof(fullname) - off);
+				
+				process_loop(fullname, scans, &i, &n);
+			}
+			closedir(dir);
+		} else
+			process_loop(argv[0], scans, &i, &n);
+
+	end:
 		argc--;
 		argv++;
 	}

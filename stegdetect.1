@@ -10,7 +10,7 @@
 .Sh SYNOPSIS
 .\" For a program:  program [-abc] file ...
 .Nm stegdetect
-.Op Fl qV
+.Op Fl qnV
 .Op Fl s Ar float
 .Op Fl d Ar num
 .Op Fl t Ar tests
@@ -27,6 +27,11 @@ The options are as follows:
 .Bl -tag -width Ds_tests
 .It Fl q
 Only reports images that are likely to have steganographic content.
+.It Fl n
+Enables checking of JPEG header information to surpress false
+positives.  If enabled, all JPEG images that contain comment fields
+will be treated as negatives.  OutGuess checking will be disabled
+if the JFIF marker does not match version 1.1.
 .It Fl V
 Displays the version number of the software.
 .It Fl s Ar float
@@ -84,19 +89,9 @@ images.
 Currently, there is no support for parameter training.  The only exported
 knob is the sensitivity level.  Future versions will export all detection
 parameters via a configuration file.
-.\" This next request is for section 4 only.
-.\" .Sh DIAGNOSTICS
-.\" This next request is for sections 1, 6, 7 & 8 only.
-.\" .Sh ENVIRONMENT
-.\" .Sh FILES
-.\" .Sh SEE ALSO
-.\" .Xr foobar 1
-.\" .Sh COMPATIBILITY
-.\" .Sh STANDARDS
+.Sh SEE ALSO
+.Xr stegbreak 1
 .Sh AUTHORS
 The
 .Nm
 utility has been developed by Niels Provos.
-.\" .Sh HISTORY
-.\" .Sh BUGS
-.\" .Sh CAVEATS

@@ -158,6 +158,11 @@ select_scan(GtkWidget *widget, gpointer data)
 		scans &= ~which;
 	}
 
+	if (scans == 0) {
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), 1);
+		scans |= which;
+	}
+
 	/* Something in the settings has changed */
 	if (sd_pid != -1)
 		change = 1;

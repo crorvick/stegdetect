@@ -63,6 +63,12 @@ u_char *comments[MAX_COMMENTS+1];
 size_t commentsize[MAX_COMMENTS+1];
 int ncomments;
 
+u_int16_t jpg_markers = 0;
+
+#define JPHMAXPOS	2
+
+int jphpos[JPHMAXPOS];
+
 typedef struct njvirt_barray_control *njvirt_barray_ptr;
 njvirt_barray_ptr *dctcoeff;
 
@@ -82,6 +88,24 @@ jpeg_getc(j_decompress_ptr cinfo)
 	}
 	datasrc->bytes_in_buffer--;
 	return GETJOCTET(*datasrc->next_input_byte++);
+}
+
+METHODDEF(boolean)
+marker_handler(j_decompress_ptr cinfo)
+{
+	u_int32_t length;
+	int offset = cinfo->unread_marker - JPEG_APP0;
+
+	jpg_markers |= 1 << offset;
+
+	length = jpeg_getc(cinfo) << 8;
+	length += jpeg_getc(cinfo);
+	length -= 2;			/* discount the length word itself */
+
+	while (length-- > 0)
+		jpeg_getc(cinfo);
+
+	return (TRUE);
 }
 
 METHODDEF(boolean)
@@ -360,7 +384,7 @@ prepare_normal(short **pdcts, int *pbits)
 int
 prepare_jphide(short **pdcts, int *pbits)
 {
-	int comp, val, bits, i, mbits;
+	int comp, val, bits, i, mbits, mode;
 	int lwib[MAX_COMPS_IN_SCAN];
 	int spos, nheight, nwidth, j, off;
 	short *dcts = NULL;
@@ -392,6 +416,7 @@ prepare_jphide(short **pdcts, int *pbits)
 
 	comp = ltab[0];
 	spos = ltab[1];
+	mode = ltab[2];
 	nheight = 0;
 	nwidth = spos - 64;
 	bits = j = 0;
@@ -402,12 +427,17 @@ prepare_jphide(short **pdcts, int *pbits)
 			nwidth = spos;
 			nheight++;
 			if (nheight >= hib[comp]) {
+				if (j == 0)
+					jphpos[0] = bits;
+				if (j == 3)
+					jphpos[1] = bits;
 				j += 3;
 				if (ltab[j] < 0)
 					goto out;
 
 				comp = ltab[j];
 				nwidth = spos = ltab[j + 1];
+				mode = ltab[j + 2];
 				nheight = 0;
 			}
 		}
@@ -416,6 +446,18 @@ prepare_jphide(short **pdcts, int *pbits)
 			continue;
 
 		val = dctcompbuf[comp][nheight][nwidth / DCTSIZE2][nwidth % DCTSIZE2];
+
+		/* Special mode checks */
+		if (mode < 0) {
+			/* Modifications to 2-LSB */
+			continue;
+		} else if (mode > 1) {
+			/* Modifications to everything only with 1/2 or 1/4 */
+			continue;
+		} else if (mode && val >= -1 && val <= 1) {
+			/* Modifications to -1, 0, 1 only 1/4 chance */
+			continue;
+		}
 
 		/* XXX - Overwrite so that we remember where we are */
 		off = nheight * wib[comp] * DCTSIZE2 + nwidth;
@@ -478,6 +520,14 @@ jpg_destroy(void)
 	comments_free();
 }
 
+void
+jpg_version(int *major, int *minor, u_int16_t *markers)
+{
+	*major = jinfo.JFIF_major_version;
+	*minor = jinfo.JFIF_minor_version;
+	*markers = jpg_markers;
+}
+
 int
 jpg_open(char *filename)
 {
@@ -488,6 +538,7 @@ jpg_open(char *filename)
 	FILE *fin;
 
 	comments_init();
+	jpg_markers = 0;
 	
 	if ((fin = fopen(filename, "r")) == NULL) {
 		int error = errno;
@@ -517,6 +568,8 @@ jpg_open(char *filename)
 	}
 	jpeg_create_decompress(&jinfo);
 	jpeg_set_marker_processor(&jinfo, JPEG_COM, comment_handler);
+	for (i = 1; i < 16; i++)
+		jpeg_set_marker_processor(&jinfo, JPEG_APP0+i, marker_handler);
 	jpeg_stdio_src(&jinfo, fin);
 	jpeg_read_header(&jinfo, TRUE);
 
@@ -579,4 +632,70 @@ file_hasextension(char *name, char *ext)
 		return (0);
 
 	return (strcasecmp(name + nlen - elen, ext) == 0);
+}
+
+#define NBUCKETS	64
+
+u_char table[256];
+
+int
+is_random(u_char *buf, int size)
+{
+	static int initalized;
+	u_char *p, val;
+	int bucket[NBUCKETS];
+	int i, j, one;
+	float tmp, sum, exp, ratio;
+
+	if (!initalized) {
+		table[0] = 0; table[1] = 1; table[2] = 1; table[3] = 2;
+		table[4] = 1; table[5] = 2; table[6] = 2; table[7] = 3;
+
+		for (i = 8; i < 16; i++)
+			table[i] = 1 + table[i & 0x7];
+		for (i = 16; i < 256; i++)
+			table[i] = table[(i >> 4) & 0xf] + table[i & 0xf];
+
+		initalized = 1;
+	}
+	
+	one = 0;
+	for (i = 0; i < size; i++)
+		one += table[buf[i]];
+
+	ratio = (float)one/(size * 8);
+#if BREAKOG_DEBUG
+	fprintf(stderr, "One: %5.2f, Zero: %5.2f\n",
+	    ratio * 100, (1-ratio) * 100);
+#endif
+	if (ratio < 0.46 || ratio > 0.54)
+		return (0);
+	/* Chi^2 Test */
+	memset(bucket, 0, sizeof(bucket));
+	one = buf[0];
+	val = 0;
+	p = &buf[1];
+	for (j = 0; j < (size-1)*8; j++) {
+		bucket[one & (NBUCKETS-1)]++;
+		if ((j % 8) == 0)
+			val = *p++;
+		one >>= 1;
+		one |= (val & 0x80);
+		val <<= 1;
+	}
+
+	exp = (float)j/NBUCKETS;
+	sum = 0;
+	for (i = 0; i < NBUCKETS; i++) {
+		tmp = (bucket[i] - exp)*(bucket[i] - exp);
+		sum += tmp/exp;
+	}
+
+#if BREAKOG_DEBUG
+	fprintf(stderr, "Chi^2: %8.3f\n", sum);
+#endif
+	if (sum > 160)
+		return (0);
+
+	return (1);
 }

@@ -23,50 +23,59 @@ esac
 dnl Checking for gtk
 AC_PATH_PROG(PATH_GTKCONFIG, gtk-config)
 if test ! -z "$PATH_GTKCONFIG" ; then
-	GTKINC=`$PATH_GTKCONFIG --cflags`
-	GTKLIB=`$PATH_GTKCONFIG --libs`
-	AC_SUBST(GTKINC)
-	AC_SUBST(GTKLIB)
-	XSTEG="xsteg"
-	AC_SUBST(XSTEG)	
+	dnl Checks for libevent
+	havelibevent=no
+	AC_MSG_CHECKING(for libevent)
+	AC_ARG_WITH(libevent,
+	[  --with-libevent=DIR      use libevent build directory],
+	[ case "$withval" in
+	  yes|no)
+	     AC_MSG_RESULT(no)
+	     ;;
+	  *)
+	     AC_MSG_RESULT($withval)
+	     if test -f $withval/event.h -a -f $withval/libevent.a; then
+	        owd=`pwd`
+	        if cd $withval; then withval=`pwd`; cd $owd; fi
+	        EVENTINC="-I$withval"
+	        EVENTLIB="-L$withval -levent"
+		havelibevent=yes
+	     else
+	        AC_ERROR(event.h or libevent.a not found in $withval)
+	     fi
+	     ;;
+	  esac ],
+	[ if test -f ${prefix}/include/event.h; then
+	     EVENTINC="-I${prefix}/include"
+	     EVENTLIB="-L${prefix}/lib -levent"
+		havelibevent=yes
+	     AC_MSG_RESULT(yes)
+	  elif test -f /usr/include/event/event.h; then
+	     EVENTINC="-I/usr/include/event"
+	     EVENTLIB="-levent"
+	     havelibevent=yes
+	     AC_MSG_RESULT(yes)
+	  elif test -f /usr/include/event.h; then
+	     EVENTLIB="-levent"
+	     havelibevent=yes
+	     AC_MSG_RESULT(yes)
+	  else
+	     AC_MSG_RESULT(no)
+	  fi
+	]
+	)
 
-dnl Checks for libevent
-AC_MSG_CHECKING(for libevent)
-AC_ARG_WITH(libevent,
-[  --with-libevent=DIR      use libevent build directory],
-[ case "$withval" in
-  yes|no)
-     AC_MSG_RESULT(no)
-     ;;
-  *)
-     AC_MSG_RESULT($withval)
-     if test -f $withval/event.h -a -f $withval/libevent.a; then
-        owd=`pwd`
-        if cd $withval; then withval=`pwd`; cd $owd; fi
-        EVENTINC="-I$withval"
-        EVENTLIB="-L$withval -levent"
-     else
-        AC_ERROR(event.h or libevent.a not found in $withval)
-     fi
-     ;;
-  esac ],
-[ if test -f ${prefix}/include/event.h; then
-     EVENTINC="-I${prefix}/include"
-     EVENTLIB="-L${prefix}/lib -levent"
-  elif test -f /usr/include/event/event.h; then
-     EVENTINC="-I/usr/include/event"
-     EVENTLIB="-levent"
-  elif test -f /usr/include/event.h; then
-     EVENTLIB="-levent"
-  else
-     AC_MSG_RESULT(no)
-     AC_ERROR(libevent not found)
-  fi
-  AC_MSG_RESULT(yes) ]
-)
-AC_SUBST(EVENTINC)
-AC_SUBST(EVENTLIB)
+	if test $havelibevent = yes; then
+		AC_SUBST(EVENTINC)
+		AC_SUBST(EVENTLIB)
 
+		GTKINC=`$PATH_GTKCONFIG --cflags`
+		GTKLIB=`$PATH_GTKCONFIG --libs`
+		AC_SUBST(GTKINC)
+		AC_SUBST(GTKLIB)
+		XSTEG="xsteg"
+		AC_SUBST(XSTEG)	
+	fi
 fi
 
 
@@ -108,6 +117,6 @@ dnl Other stuff
 AC_DEFINE_UNQUOTED(_PATH_RULES, "$prefix/share/stegbreak/rules.ini")
 AC_C_BIGENDIAN
 
-AC_CONFIG_SUBDIRS(jpeg-6b)
+AC_CONFIG_SUBDIRS(jpeg-6b file)
 
 AC_OUTPUT(Makefile)

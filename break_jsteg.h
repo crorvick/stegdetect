@@ -31,7 +31,7 @@
 #ifndef _BREAK_JSTEG_
 #define _BREAK_JSTEG_
 
-void *break_jsteg_prepare(short *, int);
+void *break_jsteg_prepare(char *, short *, int);
 void break_jsteg_destroy(void *);
 int crack_jsteg(char *, char *, void *);
 

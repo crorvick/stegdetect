@@ -36,8 +36,13 @@
 #include <err.h>
 #include <errno.h>
 #include <unistd.h>
+#include <ctype.h>
+
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <jpeglib.h>
+#include <file.h>
 
 #include "config.h"
 #include "common.h"
@@ -53,10 +58,6 @@ struct ogobj {
 	u_int32_t coeff[4096];
 };
 
-#define TEST_BIT(x,y)		((x)[(y) / 32] & (1 << ((y) & 31)))
-#define WRITE_BIT(x,y,what)	((x)[(y) / 32] = ((x)[(y) / 32] & \
-				~(1 << ((y) & 31))) | ((what) << ((y) & 31)))
-
 #define DEFAULT_ITER	256
 #define INIT_SKIPMOD	32
 #define SKIPADJ(x,y)	((y) > (x)/32 ? 2 : 2 - ((x/32) - (y))/(float)(x/32))
@@ -67,7 +68,8 @@ typedef struct _iterator {
 	int off;		/* Current bit position */
 } iterator;
 
-int break_outguess(struct ogobj *, struct arc4_stream *, iterator *);
+int break_outguess(struct ogobj *, struct arc4_stream *, iterator *,
+    char **, int *);
 
 /* Globals */
 int min_len = 256;
@@ -230,6 +232,8 @@ crack_outguess(char *filename, char *word, void *obj)
 	static int init;
 	static struct arc4_stream as;
 	static iterator it;
+	char *buf;
+	int buflen;
 	
 	struct arc4_stream tas;
 	iterator tit;
@@ -250,92 +254,35 @@ crack_outguess(char *filename, char *word, void *obj)
 
 	tas = as;
 	tit = it;
-	if (break_outguess(ogob, &tas, &tit)) {
-		fprintf(stdout, "%s : outguess[v0.13b](%s)\n",
+	if (break_outguess(ogob, &tas, &tit, &buf, &buflen)) {
+		int i;
+		extern int noprint;
+		fprintf(stdout, "%s : outguess[v0.13b](%s)[",
 			filename, word);
+		noprint = 0;
+		file_process(buf, buflen);
+		noprint = 1;
+		fprintf(stdout, "][");
+		for (i = 0; i < 16; i++)
+			fprintf(stdout, "%c",
+			    isprint(buf[i]) ? buf[i] : '.');
+		fprintf(stdout, "]\n");
 		return (1);
 	}
 
 	return (0);
 }
 
-u_char table[256];
-
-#define BREAKOG_DEBUG 0
-
-#define NBUCKETS	64
-
 int
-is_random(u_char *buf, int size)
-{
-	static int initalized;
-	u_char *p, val;
-	int bucket[NBUCKETS];
-	int i, j, one;
-	float tmp, sum, exp, ratio;
-
-	if (!initalized) {
-		table[0] = 0; table[1] = 1; table[2] = 1; table[3] = 2;
-		table[4] = 1; table[5] = 2; table[6] = 2; table[7] = 3;
-
-		for (i = 8; i < 16; i++)
-			table[i] = 1 + table[i & 0x7];
-		for (i = 16; i < 256; i++)
-			table[i] = table[(i >> 4) & 0xf] + table[i & 0xf];
-
-		initalized = 1;
-	}
-	
-	one = 0;
-	for (i = 0; i < size; i++)
-		one += table[buf[i]];
-
-	ratio = (float)one/(size * 8);
-#if BREAKOG_DEBUG
-	fprintf(stderr, "One: %5.2f, Zero: %5.2f\n",
-	    ratio * 100, (1-ratio) * 100);
-#endif
-	if (ratio < 0.46 || ratio > 0.54)
-		return (0);
-	/* Chi^2 Test */
-	memset(bucket, 0, sizeof(bucket));
-	one = buf[0];
-	val = 0;
-	p = &buf[1];
-	for (j = 0; j < (size-1)*8; j++) {
-		bucket[one & (NBUCKETS-1)]++;
-		if ((j % 8) == 0)
-			val = *p++;
-		one >>= 1;
-		one |= (val & 0x80);
-		val <<= 1;
-	}
-
-	exp = (float)j/NBUCKETS;
-	sum = 0;
-	for (i = 0; i < NBUCKETS; i++) {
-		tmp = (bucket[i] - exp)*(bucket[i] - exp);
-		sum += tmp/exp;
-	}
-
-#if BREAKOG_DEBUG
-	fprintf(stderr, "Chi^2: %8.3f\n", sum);
-#endif
-	if (sum > 160)
-		return (0);
-
-	return (1);
-}
-
-int
-break_outguess(struct ogobj *og, struct arc4_stream *as, iterator *it)
+break_outguess(struct ogobj *og, struct arc4_stream *as, iterator *it,
+    char **pbuf, int *pbuflen)
 {
 	u_char state[4];
-	u_char buf[512];
+	static u_char buf[512];
 	struct arc4_stream tas = *as;
 	int length, seed, need;
 	int bits, i, n;
-	
+
 	state[0] = steg_retrbyte(og->coeff, 8, it) ^ arc4_getbyte(as);
 	state[1] = steg_retrbyte(og->coeff, 8, it) ^ arc4_getbyte(as);
 	state[2] = steg_retrbyte(og->coeff, 8, it) ^ arc4_getbyte(as);
@@ -366,6 +313,12 @@ break_outguess(struct ogobj *og, struct arc4_stream *as, iterator *it)
 	/* Plaintext tests? */
 	for (i = 0; i < n; i++)
 		buf[i] ^= arc4_getbyte(&tas);
+
+	if (file_process(buf, n) == 0)
+		return (0);
+
+	*pbuf = buf;
+	*pbuflen = n;
 
 	return (1);
 }

@@ -38,7 +38,11 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include <jpeglib.h>
+#include <file.h>
 
 #include "config.h"
 #include "common.h"
@@ -50,19 +54,37 @@
 #endif
 
 #define JSTEGBYTES	8
+#define JSTEGHEADER	64
 
 struct jstegobj {
 	int skip;
 	u_int8_t coeff[JSTEGBYTES];
+	u_int8_t header[JSTEGHEADER];
 };
 
 int break_jsteg(struct jstegobj *, struct arc4_stream *);
+
+int break_jsteg_filetest(char *filename, struct jstegobj *obj)
+{
+	extern int noprint;
+
+	if (file_process(obj->header, sizeof(obj->header)) == 0)
+		return (0);
+
+	fprintf(stdout, "%s : jsteg[", filename);
+	noprint = 0;
+	file_process(obj->header, sizeof(obj->header));
+	noprint = 1;
+	fprintf(stdout, "]\n");
+
+	return (1);
+}
 
 void *
 break_jsteg_read(char *filename)
 {
 	struct jstegobj *jstegob;
-	int fd;
+	int fd, size;
 
 	fd = open(filename, O_RDONLY, 0);
 	if (fd == -1) {
@@ -75,7 +97,9 @@ break_jsteg_read(char *filename)
 	if (jstegob == NULL)
 		err(1, "malloc");
 
-	if (read(fd, jstegob, sizeof(*jstegob)) != sizeof(*jstegob)) {
+	size = read(fd, jstegob, sizeof(*jstegob));
+	/* Supports old size, too */
+	if (size != sizeof(*jstegob) && size != sizeof(int) + JSTEGBYTES) {
 		close(fd);
 		free(jstegob);
 		return (NULL);
@@ -84,6 +108,9 @@ break_jsteg_read(char *filename)
 	jstegob->skip = ntohl(jstegob->skip);
 
 	close(fd);
+
+	if (size == sizeof(*jstegob))
+		break_jsteg_filetest(filename, jstegob);
 
 	return (jstegob);
 }
@@ -117,29 +144,30 @@ break_jsteg_destroy(void *obj)
 }
 
 void *
-break_jsteg_prepare(short *dcts, int bits)
+break_jsteg_prepare(char *filename, short *dcts, int bits)
 {
 	struct jstegobj *jstegob;
-	int i, j, max, bytes, jsbits;
+	int off, i, j, max, bytes, jsbits;
 	u_char *p;
 	short val;
 	
 	jstegob = malloc(sizeof(struct jstegobj));
 	if (jstegob == NULL)
 		err(1, "malloc");
+	memset(jstegob, 0, sizeof(struct jstegobj));
 
 	max = sizeof(jstegob->coeff) * 8;
-	bytes = jsteg_size(dcts, bits, &i);
+	bytes = jsteg_size(dcts, bits, &off);
 	jsbits = bytes * 8;
 	jstegob->skip = bytes - sizeof(jstegob->coeff);
 
-	if (jsbits < max || i + jsbits > bits) {
+	if (jsbits < max || off + jsbits > bits) {
 		warnx(__FUNCTION__": bad size in bits, %d", bits);
 		return (NULL);
 	}
 
 	p = jstegob->coeff;
-	i += jsbits - max;
+	i = off + jsbits - max;
 	for (j = 0; j < max; j++) {
 		val = dcts[i++];
 
@@ -149,13 +177,30 @@ break_jsteg_prepare(short *dcts, int bits)
 		*p = (*p << 1) | (val & 0x01);
 	}
 	
+	/* Also safe the beginning.  Can use for later matches */
+	p = jstegob->header;
+	i = off;
+        max = JSTEGHEADER * 8;
+	if (max > jsbits)
+		max = jsbits;
+	for (j = 0; j < max; j++) {
+		val = dcts[i++];
+
+		if (j != 0 && (j % 8) == 0)
+			p++;
+		
+		*p = (*p << 1) | (val & 0x01);
+	}
+	
+	break_jsteg_filetest(filename, jstegob);
+
 	return (jstegob);
 }
 
 int
 crack_jsteg(char *filename, char *word, void *obj)
 {
-	static u_char oword[57];	/* version 3 marker */
+	static u_char oword[57];
 	static int init;
 	static struct arc4_stream as;
 	
@@ -176,7 +221,33 @@ crack_jsteg(char *filename, char *word, void *obj)
 
 	tas = as;
 	if (break_jsteg(jstegob, &tas)) {
-		fprintf(stdout, "%s : jsteg(%s)\n", filename, word);
+		extern int noprint;
+		int i;
+		u_int8_t header[JSTEGHEADER];
+
+		fprintf(stdout, "%s : jsteg(%s)", filename, word);
+
+		/* Check if we have a header.  Try to file magic it */
+		for (i = 0; i < JSTEGHEADER; i++)
+			if (jstegob->header[i])
+				break;
+		if (i >= JSTEGHEADER)
+			goto out;
+
+		tas = as;
+		for (i = 0; i < JSTEGHEADER; i++)
+			header[i] = jstegob->header[i] ^ arc4_getbyte(&tas);
+		if (file_process(header, JSTEGHEADER) == 0)
+			goto out;
+
+		fprintf(stdout, "[");
+		noprint = 0;
+		file_process(header, JSTEGHEADER);
+		noprint = 1;
+		fprintf(stdout, "]");
+
+		out:
+		fprintf(stdout, "\n");
 		return (1);
 	}
 

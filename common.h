@@ -34,6 +34,7 @@
 void jpg_finish(void);
 void jpg_destroy(void);
 int jpg_open(char *);
+void jpg_version(int *, int *, u_int16_t *);
 
 int prepare_all(short **, int *);
 int prepare_normal(short **, int *);
@@ -44,6 +45,12 @@ int prepare_outguess(short **, int *);
 
 char *fgetl(char *, int, FILE *);
 int file_hasextension(char *, char *);
+
+int is_random(u_char *, int);
+
+#define TEST_BIT(x,y)		((x)[(y) / 32] & (1 << ((y) & 31)))
+#define WRITE_BIT(x,y,what)	((x)[(y) / 32] = ((x)[(y) / 32] & \
+				~(1 << ((y) & 31))) | ((what) << ((y) & 31)))
 
 extern int hib[], wib[];
 

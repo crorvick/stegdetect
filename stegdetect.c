@@ -41,7 +41,7 @@
 #include "config.h"
 #include "common.h"
 
-#define VERSION "0.3"
+#define VERSION "0.4"
 
 #define DBG_PRINTHIST	0x0001
 #define DBG_CHIDIFF	0x0002
@@ -57,6 +57,9 @@
 #define FLAG_DOJPHIDE	0x0002
 #define FLAG_DOJSTEG	0x0004
 #define FLAG_DOINVIS	0x0008
+#define FLAG_DOF5	0x0010
+#define FLAG_CHECKHDRS	0x1000
+#define FLAG_JPHIDESTAT	0x2000
 
 float chi2cdf(float chi, int dgf);
 
@@ -68,13 +71,21 @@ float scale = 1;		/* Sensitivity scaling */
 int debug = 0;
 int quiet = 0;
 
+static short *olddata;
+static int oldx, oldy;
+
+void
+buildDCTreset(void)
+{
+	olddata = NULL;
+	oldx = oldy = 0;
+}
+
 void
 buildDCThist(short *data, int x, int y)
 {
 	int i, min, max;
 	int off, count, sum;
-	static short *olddata;
-	static int oldx, oldy;
 
 	if (olddata != data || x < oldx || y < oldy ||
 	    x - oldx + y - oldy >= y - x) {
@@ -195,7 +206,7 @@ unify_false_jphide(float *hist, float *theo, float *obs, float *discard)
 
 	/* Build theoretical histogram */
 	for (i = 0; i < 128; i++) {
-		if (i == 63 || i == 64 || i == 65)
+		if (i == 64)
 			continue;
 
 		if (i < 64) {
@@ -303,16 +314,17 @@ unify_jphide(float *hist, float *theo, float *obs, float *discard)
 		/* Lower bit = 0 */
 		if (i < 128 && !(i & 1))
 			continue;
-		else if (i & 1)
+		else if ((i >= 128) && (i & 1))
 			continue;
 
 		theo[size] = (hist[i] + hist[i + 1])/2;
 		obs[size++] = hist[i];
 	}
 
-	/* Special case for 1 and -1 *
-	   theo[size] = (hist[-1 + 128] + hist[1 + 128] + hist[0 + 128])/2;
-	   obs[size++] = hist[-1 + 128] + hist[1 + 128];
+	/* Special case for 1 and -1 */
+	/*
+	theo[size] = (hist[-1 + 128] + hist[1 + 128] + hist[0 + 128])/2;
+	obs[size++] = hist[-1 + 128] + hist[1 + 128];
 	*/
 	return (size);
 }
@@ -395,10 +407,11 @@ chi2test(short *data, int bits,
 
 #define BINSEARCH(imin, imax, imaxiter) \
 	percent = (imax); \
-	_good = (imax); \
+	_good = (imax) + 1; \
 	_iteration = 0; \
 	_min = (imin); \
 	_max = (imax); \
+	buildDCTreset(); \
 	while (_iteration < (imaxiter))
 
 #define BINSEARCH_NEXT(thresh) \
@@ -425,43 +438,38 @@ chi2test(short *data, int bits,
 
 #define BINSEARCH_IFABORT(thresh) \
 	percent = _good; \
-	if (_good >= (thresh))
+	if (_good > (thresh))
 
 int
 histogram_chi_jsteg(short *data, int bits)
 {
-	int off, length, minlen, maxlen;
+	int length, minlen, maxlen, end;
 	float f, sum, percent, i, count, where;
-	float max, aftercount, scale, fs, start;
+	float max, aftercount, scale, fs;
 	BINSEARCHVAR;
 
 	if (bits == 0)
 		goto abort;
-	start = 100*400/bits;
-	if (start >= 7)
-		goto abort;
-
-	if (start < 0.5)
-		start = 0.5;
-
-	BINSEARCH(start, 7, 6) {
+	end = bits/100;
+	if (end < 4000)
+		end = 4000;
+	BINSEARCH(200, end, 6) {
 		sum = 0;
-		for (i = 1; i <= 100; i += percent) {
-			off = i*bits/100;
-			f = chi2test(data, bits, unify_false_jsteg, 0, off);
+		for (i = percent; i <= bits; i += percent) {
+			f = chi2test(data, bits, unify_false_jsteg, 0, i);
 			if (f == 0)
 				break;
 			if (f > 0.4)
-				sum += f * (i > 1 ? percent : 1);
+				sum += f * percent;
 			if ((debug & DBG_CHI) && f != 0)
-				fprintf(stdout, "%04f[:] %8.5f%%\n",
-					i, f * 100);
+				fprintf(stdout, "%04f[:] %8.5f%% %f\n",
+					i, f * 100, sum);
 		}
 
-		BINSEARCH_NEXT(1);
+		BINSEARCH_NEXT(400);
 	}
 
-	BINSEARCH_IFABORT(7) {
+	BINSEARCH_IFABORT(end) {
 	abort:
 		if (debug & DBG_ENDVAL)
 			fprintf(stdout,
@@ -473,13 +481,12 @@ histogram_chi_jsteg(short *data, int bits)
 	aftercount = max = 0;
 	scale = 0.95;
 	sum = 0;
-	for (i = 1; i <= 100; i += percent) {
-		off = i*bits/100;
-		f = chi2test(data, bits, unify_normal, 0, off);
+	for (i = percent; i <= bits; i += percent) {
+		f = chi2test(data, bits, unify_normal, 0, i);
 		if (f == 0)
 			break;
 		if (f > 0.4) {
-			sum += f;
+			sum += f * percent;
 			count++;
 		}
 		if (f >= (max * scale)) {
@@ -494,7 +501,7 @@ histogram_chi_jsteg(short *data, int bits)
 			where = i;
 		} else if (f > 0.05 * max) {
 			if (aftercount >= 0)
-				aftercount += f;
+				aftercount += f * percent;
 			else {
 				aftercount++;
 				where = i;
@@ -504,16 +511,17 @@ histogram_chi_jsteg(short *data, int bits)
 		if ((debug & DBG_CHI) &&
 		    ((debug & DBG_PRINTZERO) || f != 0))
 			fprintf(stdout, "%04f: %8.5f%%\n",
-				i, f * 100);
+				i/8, f * 100);
 	}
 
 	length = jsteg_size(data, bits, NULL);
-	minlen = where*bits/100/8;
-	maxlen = (where+1)*bits/100/8;
+	minlen = where/8;
+	maxlen = (where + percent)/8;
 	if (debug & DBG_ENDVAL) {
 		fprintf(stdout,
-		    "Accumulation (%4.1f%%): %f%% - %f (%f) (%d:%d - %d)\n",
-		    percent, sum * 100, aftercount*100, count,
+		    "Accumulation (%d): %f%% - %f (%f) (%d:%d - %d)\n",
+		    (int)percent,
+		    sum/percent, aftercount, count,
 		    length, minlen, maxlen);
 	}
 
@@ -623,19 +631,265 @@ histogram_chi_outguess(short *data, int bits)
 }
 
 int
+jphide_runlength(short *data, int bits)
+{
+	int i, max = -1;
+	short coeff, rundct[128], runmdct[128];
+	int runlen[128], runmlen[128], off;
+
+	memset(rundct, 0, sizeof(rundct));
+	memset(runlen, 0, sizeof(runlen));
+	memset(runmdct, 0, sizeof(runmdct));
+	memset(runmlen, 0, sizeof(runmlen));
+
+	for (i = 0; i < bits; i++) {
+		coeff = data[i];
+
+		if (coeff < -127 || coeff > 127)
+			continue;
+
+		if (coeff >= -1 && coeff <= 1)
+			continue;
+
+		if (coeff < 0)
+			off = -coeff/2;
+		else
+			off = coeff/2 + 64;
+
+		if (rundct[off] != coeff) {
+			if (runlen[off] > 1 && runlen[off] > runmlen[off]) {
+				runmlen[off] = runlen[off];
+				runmdct[off] = rundct[off];
+			}
+			rundct[off] = coeff;
+			runlen[off] = 1;
+		} else {
+			runlen[off]++;
+
+			if (runlen[off] > max)
+				max = runlen[off];
+		}
+	}
+
+	return (max);
+}
+
+int
+jphide_zero_one(void)
+{
+	int one, zero, res, sum;
+	int negative = 0;
+
+	/* Zero and One have a 1/4 chance to be modified, back project */
+	one = DCThist[-1 + 128] + DCThist[1 + 128];
+	zero = DCThist[0 + 128];
+	sum = one + zero;
+	if (sum > 10) {
+		if (one > zero)
+			res = (3*zero - one);
+		else
+			res = (3*one - zero);
+
+		if (res < -1)
+			negative = 1;
+		else if (sum >= 15 && res <= -1)
+			negative = 1;
+
+		if (debug & DBG_ENDVAL)
+			printf("Zero/One: %d : %d -> %5.1f%s\n",
+			    one, zero, (float)res/2, negative ? " **" : "");
+
+	}
+	return (negative);
+}
+
+int
+jphide_empty_pair(void)
+{
+	int i, res;
+
+	res = 0;
+	for (i = 0; i < 256; i++) {
+		if (i >= (-1 + 128) && i <= (1 + 128))
+			continue;
+		if (i < 128 && !(i & 1))
+			continue;
+		else if (i >= 128 && (i & 1))
+			continue;
+
+		if ((DCThist[i] + DCThist[i+1]) >= 5 &&
+		    (!DCThist[i] || !DCThist[i+1]))
+			res++;
+	}
+	if (debug & DBG_ENDVAL)
+		printf("Empty pairs: %d\n", res);
+	if (res > 3)
+		return (1);
+
+	return (0);
+}
+/*
+ * Calculate liklihood of JPHide embedding.
+ * Pos is the last bit position where we are guaranteed to have
+ * a 0.5 modification chance.
+ */
+
+int stat_runlength = 0;
+int stat_zero_one = 0;
+int stat_empty_pair = 0;
+
+int
 histogram_chi_jphide(short *data, int bits)
 {
-	int i, off, range;
+	int i, range, highpeak, negative;
+	extern int jphpos[];
+	float f, f2, sum, false;
+
+	/* Image is too small */
+	if (jphpos[0] < 500)
+		return (0);
+
+	buildDCTreset();
+	f = chi2test(data, bits, unify_jphide, 0, jphpos[0]);
+	if (debug & DBG_ENDVAL)
+		fprintf(stdout, "Pos[0]: %04d: %8.5f%%\n", jphpos[0], f*100);
+
+	/* If JPhide was used, we should get a high value at this position */
+	if (f < 0.9)
+		return (0);
+
+	if (jphide_runlength(data, jphpos[0]) > 16) {
+		stat_runlength++;
+		return (0);
+	}
+	if (jphide_zero_one()) {
+		stat_zero_one++;
+		return (0);
+	}
+
+	if (jphide_empty_pair()) {
+		stat_empty_pair++;
+		return (0);
+	}
+
+	false = 0;
+	f2 = chi2test(data, bits, unify_false_jphide, 0, jphpos[0]);
+	if (debug & DBG_ENDVAL)
+		fprintf(stdout, "Pos[0]: %04d[:] %8.5f%%: %8.5f%%\n",
+		    jphpos[0], f2*100, (f2 - f)*100);
+
+	/* JPHide embedding reduces f2 and increases f */
+	if (f2 * 0.95 > f)
+		return (0);
+
+	f = chi2test(data, bits, unify_jphide, jphpos[0]/2, jphpos[0]);
+	if (debug & DBG_ENDVAL)
+		fprintf(stdout, "Pos[0]/2: %04d: %8.5f%%\n", jphpos[0], f*100);
+	if (f < 0.9)
+		return (0);
+
+	f2 = chi2test(data, bits, unify_false_jphide, jphpos[0]/2, jphpos[0]);
+	if (debug & DBG_ENDVAL)
+		fprintf(stdout, "Pos[0]/2: %04d[:] %8.5f%%: %8.5f%%\n",
+		    jphpos[0], f2*100, (f2 - f)*100);
+	if (f2 * 0.95 > f)
+		return (0);
+
+	f = chi2test(data, bits, unify_jphide, 0, jphpos[0]/2);
+	f2 = chi2test(data, bits, unify_false_jphide, 0, jphpos[0]/2);
+	if (debug & DBG_ENDVAL)
+		fprintf(stdout, "0->1/2: %04d[:] %8.5f%% %8.5f%%\n",
+		    jphpos[0], f*100, f2*100);
+
+	if (f2 * 0.95 > f)
+		return (0);
+
+	range = jphpos[0]/12;
+	for (i = 11; i >= 1 && range < 250; i--)
+		range = jphpos[0]/i;
+	if (range < 250)
+		range = 250;
+
+	negative = highpeak = 0;
+	false = sum = 0;
+	for (i = range; i <= bits && (!negative || i < 4*jphpos[0]);
+	    i += range) {
+		f = chi2test(data, bits, unify_jphide, 0, i);
+		f2 = chi2test(data, bits, unify_false_jphide, 0, i);
+		
+		if (i <= jphpos[0] && jphide_zero_one()) {
+			stat_zero_one++;
+			negative++;
+		}
+		if (i <= jphpos[0] && jphide_empty_pair()) {
+			stat_empty_pair++;
+			negative++;
+		}
+		if (i <= jphpos[1] && f2 >= 0.95) {
+			false += f2 * range;
+			if (false * 1.10 >= jphpos[1])
+				negative++;
+		}
+
+		/* Special tests */
+		if (f >= 0.95)
+			highpeak = 1;
+		if (i > jphpos[0] && !highpeak)
+			negative++;
+		if (highpeak && f < 0.90 && sum < jphpos[0])
+			negative++;
+		if (i <= jphpos[1] && f2*0.99 > f)
+			negative++;
+		if (f >= 0.9)
+			sum += f * range;
+		else if (f < 0.2)
+			break;
+
+		if ((debug & DBG_CHI) &&
+		    ((debug & DBG_PRINTZERO) || f != 0))
+			fprintf(stdout, "%04d: %8.5f%% %8.5f%% %.2f %.2f %s\n",
+			    i, f * 100, f2*100, sum, false,
+			    (i <= jphpos[0] && f2*0.99 > f) ||
+			    (i <= jphpos[1] && false * 1.10 >= jphpos[1]) 
+			    ? "**" : "");
+
+	}
+
+	sum /= 1000;
+
+	if (debug & DBG_ENDVAL)
+		fprintf(stdout, "Accumulation (neg = %d, %d): %f%% [%d]\n",
+		    negative, range, sum * 100, jphpos[1]);
+
+	if (negative)
+		return (0);
+
+	sum *= (float)1100/jphpos[0];
+
+	return (scale * sum );
+}
+
+int
+histogram_chi_jphide_old(short *data, int bits)
+{
+	int i, highpeak, range;
+	extern int jphpos[];
 	float f, sum, percent;
+	int start, end;
 	BINSEARCHVAR;
 
-	BINSEARCH(1, 10, 7) {
-		range = percent*bits/100;
+	end = bits/10;
+	start = jphpos[0]/2;
+
+	if (start > end)
+		return (0);
+
+	BINSEARCH(start, end, 7) {
+		range = percent;
 		sum = 0;
-		for (i = 1; i <= 100; i ++) {
-			off = i*bits/100;
+		for (i = 0; i <= bits; i += range) {
 			f = chi2test(data, bits, unify_false_jphide,
-				     0, off);
+				     0, i + range);
 			if (f > 0.3)
 				sum += f;
 			else if (f < 0.2)
@@ -648,15 +902,19 @@ histogram_chi_jphide(short *data, int bits)
 		BINSEARCH_NEXT(3);
 	}
 
-	BINSEARCH_IFABORT(10)
+	BINSEARCH_IFABORT(end)
 		return (0);
 
-	range = percent * bits/100;
-	sum = 0;
-	for (i = 1; i <= 100; i ++) {
-		off = i*bits/100;
+	range = percent;
+	highpeak = sum = 0;
+	for (i = 0; i <= bits; i += range) {
 		f = chi2test(data, bits, unify_jphide,
-			     0, off);
+			     0, i + range);
+		if (!highpeak && f > 0.9)
+			highpeak = 1;
+		if (highpeak && f < 0.75)
+			break;
+
 		if (f > 0.3)
 			sum += f;
 		else if (f < 0.2)
@@ -668,7 +926,7 @@ histogram_chi_jphide(short *data, int bits)
 	}
 
 	if (debug & DBG_ENDVAL)
-		fprintf(stdout, "Accumulation (%4.1f%%): %f%%\n",
+		fprintf(stdout, "Accumulation (%4.0f): %f%%\n",
 			percent,
 			sum * 100);
 
@@ -783,7 +1041,7 @@ void
 usage(void)
 {
 	fprintf(stderr,
-		"Usage: %s [-V] [-s <float>] [-d <num>] [-t <tests>] [file.jpg ...]\n",
+		"Usage: %s [-nqV] [-s <float>] [-d <num>] [-t <tests>] [file.jpg ...]\n",
 		progname);
 }
 
@@ -806,10 +1064,14 @@ quality(char *prepend, int q)
 void
 detect(char *filename, int scans)
 {
+	extern u_char *comments[];
+	extern size_t commentsize[];
+	extern int ncomments;
 	char outbuf[1024];
 	int bits, jbits;
 	int res, flag;
-	short *dcts, *jdcts;
+	short *jdcts = NULL;
+	short *dcts = NULL;
 
 	if (scans & FLAG_DOJSTEG) {
 		prepare_jsteg(&jdcts, &jbits);
@@ -828,32 +1090,85 @@ detect(char *filename, int scans)
 	flag = 0;
 	sprintf(outbuf, "%s :", filename);
 
+	if (scans & FLAG_DOF5) {
+		if (ncomments != 1 || commentsize[0] != 63)
+			goto no_f5;
+		if (strcmp(comments[0], "JPEG Encoder Copyright 1998, James R. Weeks and BioElectroMech."))
+			goto no_f5;
+		
+		flag = 1;
+		strlcat(outbuf, " f5(***)", sizeof(outbuf));
+
+	no_f5:
+	}
+
 	if (scans & FLAG_DOINVIS) {
-		extern u_char *comments[];
-		extern size_t commentsize[];
-		extern int ncomments;
 		u_char *p;
-		u_int32_t length;
+		u_int32_t ol, length;
+		int i, match = 0;
 
-		if (ncomments < 2)
+		if (ncomments < 2 || commentsize[1] < 4)
 			goto no_invisiblesecrets;
-
-		/* Check first file */
+		
 		p = comments[1];
 		length = p[3] << 24;
 		length |= p[2] << 16;
 		length |= p[1] << 8;
 		length |= p[0];
+		ol = length;
+		length += 4;
+		if (commentsize[1] == length)
+			match = 1;
 
-		if (commentsize[1] == length + 4) {
+		if (!match) {
+			for (i = 1; i < ncomments && length; i++) {
+				if (commentsize[i] > length)
+					break;
+				length -= commentsize[i];
+			}
+			if (!length)
+				match = 1;
+		}
+
+		if (match) {
 			char tmp[128];
 
 			flag = 1;
-			snprintf(tmp, sizeof(tmp), " invisible(%d)", length);
+			snprintf(tmp, sizeof(tmp), " invisible[%d](***)", ol);
 			strlcat(outbuf, tmp, sizeof(outbuf));
 		}
 		
 	no_invisiblesecrets:
+	}
+
+	if ((scans & FLAG_CHECKHDRS)) {
+		/* Disable all checks if comments are present */
+		if (ncomments) {
+			if (jdcts != NULL)
+				free(jdcts);
+			scans = 0;
+			if (debug & DBG_ENDVAL)
+				fprintf(stdout,
+				    "Disabled by comment check: %d\n",
+				    ncomments);
+		} else {
+			int major, minor;
+			u_int16_t marker;
+
+			jpg_version(&major, &minor, &marker);
+			/* Disable all checks if APP markers are present */
+			if (marker) {
+				if (jdcts != NULL)
+					free(jdcts);
+				scans = 0;
+				if (debug & DBG_ENDVAL)
+					fprintf(stdout,
+					    "Disabled by header check: %d.%d %#0x\n",
+					    major, minor, marker);
+			} else if (major != 1 || minor != 1)
+				/* OutGuess uses its own version of jpeg */
+				scans &= ~FLAG_DOOUTGUESS;
+		}
 	}
 	
 	if (scans & FLAG_DOJSTEG) {
@@ -881,7 +1196,8 @@ detect(char *filename, int scans)
 		if (res == -1) {
 			strlcat(outbuf, " skipped (false positive likely)",
 				sizeof(outbuf));
-			flag = 1;
+			if (!flag)
+				flag = -1;
 			scans &= ~(FLAG_DOOUTGUESS|FLAG_DOJPHIDE);
 		}
 
@@ -901,6 +1217,8 @@ detect(char *filename, int scans)
 
 	if ((scans & FLAG_DOJPHIDE) && prepare_jphide(&dcts, &bits) != -1) {
 		res = histogram_chi_jphide(dcts, bits);
+		if (!res)
+			res = histogram_chi_jphide_old(dcts, bits);
 		if (res) {
 			strlcat(outbuf, quality(" jphide", res),
 				sizeof(outbuf));
@@ -912,7 +1230,7 @@ detect(char *filename, int scans)
 	if (!flag)
 		strlcat(outbuf, " negative", sizeof(outbuf));
 
-	if (flag || !quiet)
+	if (flag > 0 || !quiet)
 		fprintf(stdout, "%s\n", outbuf);
 
 	jpg_finish();
@@ -922,18 +1240,22 @@ detect(char *filename, int scans)
 int
 main(int argc, char *argv[])
 {
-	int i, scans;
+	int i, scans, checkhdr = 0;
 	extern char *optarg;
 	extern int optind;
-	char ch;
+	int ch;
 
 	progname = argv[0];
 
-	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG | FLAG_DOINVIS;
+	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG | FLAG_DOINVIS |
+	    FLAG_DOF5;
 
 	/* read command line arguments */
-	while ((ch = getopt(argc, argv, "s:Vd:t:q")) != -1)
+	while ((ch = getopt(argc, argv, "ns:Vd:t:q")) != -1)
 		switch((char)ch) {
+		case 'n':
+			checkhdr = 1;
+			break;
 		case 'q':
 			quiet = 1;
 			break;
@@ -965,6 +1287,9 @@ main(int argc, char *argv[])
 				case 'i':
 					scans |= FLAG_DOINVIS;
 					break;
+				case 'f':
+					scans |= FLAG_DOF5;
+					break;
 				default:
 					usage();
 					exit(1);
@@ -974,6 +1299,9 @@ main(int argc, char *argv[])
 			usage();
 			exit(1);
 		}
+	
+	if (checkhdr)
+		scans |= FLAG_CHECKHDRS;
 
 	argc -= optind;
 	argv += optind;
@@ -992,6 +1320,14 @@ main(int argc, char *argv[])
 
 		while (fgetl(line, sizeof(line), stdin) != NULL)
 			detect(line, scans);
+	}
+
+	if (debug & FLAG_JPHIDESTAT) {
+		fprintf(stdout, "Positive rejected because of\n"
+		    "\tRunlength: %d\n"
+		    "\tZero-One: %d\n"
+		    "\tEmpty Pair: %d\n",
+		    stat_runlength, stat_zero_one, stat_empty_pair);
 	}
 
 	exit(0);

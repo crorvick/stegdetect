@@ -967,59 +967,68 @@ else
 fi
 
 if test ! -z "$PATH_GTKCONFIG" ; then
-	GTKINC=`$PATH_GTKCONFIG --cflags`
-	GTKLIB=`$PATH_GTKCONFIG --libs`
-	
-	
-	XSTEG="xsteg"
-		
-
-echo $ac_n "checking for libevent""... $ac_c" 1>&6
-echo "configure:979: checking for libevent" >&5
-# Check whether --with-libevent or --without-libevent was given.
+		havelibevent=no
+	echo $ac_n "checking for libevent""... $ac_c" 1>&6
+echo "configure:973: checking for libevent" >&5
+	# Check whether --with-libevent or --without-libevent was given.
 if test "${with_libevent+set}" = set; then
   withval="$with_libevent"
    case "$withval" in
-  yes|no)
-     echo "$ac_t""no" 1>&6
-     ;;
-  *)
-     echo "$ac_t""$withval" 1>&6
-     if test -f $withval/event.h -a -f $withval/libevent.a; then
-        owd=`pwd`
-        if cd $withval; then withval=`pwd`; cd $owd; fi
-        EVENTINC="-I$withval"
-        EVENTLIB="-L$withval -levent"
-     else
-        { echo "configure: error: event.h or libevent.a not found in $withval" 1>&2; exit 1; }
-     fi
-     ;;
-  esac 
+	  yes|no)
+	     echo "$ac_t""no" 1>&6
+	     ;;
+	  *)
+	     echo "$ac_t""$withval" 1>&6
+	     if test -f $withval/event.h -a -f $withval/libevent.a; then
+	        owd=`pwd`
+	        if cd $withval; then withval=`pwd`; cd $owd; fi
+	        EVENTINC="-I$withval"
+	        EVENTLIB="-L$withval -levent"
+		havelibevent=yes
+	     else
+	        { echo "configure: error: event.h or libevent.a not found in $withval" 1>&2; exit 1; }
+	     fi
+	     ;;
+	  esac 
 else
    if test -f ${prefix}/include/event.h; then
-     EVENTINC="-I${prefix}/include"
-     EVENTLIB="-L${prefix}/lib -levent"
-  elif test -f /usr/include/event/event.h; then
-     EVENTINC="-I/usr/include/event"
-     EVENTLIB="-levent"
-  elif test -f /usr/include/event.h; then
-     EVENTLIB="-levent"
-  else
-     echo "$ac_t""no" 1>&6
-     { echo "configure: error: libevent not found" 1>&2; exit 1; }
-  fi
-  echo "$ac_t""yes" 1>&6 
-
+	     EVENTINC="-I${prefix}/include"
+	     EVENTLIB="-L${prefix}/lib -levent"
+		havelibevent=yes
+	     echo "$ac_t""yes" 1>&6
+	  elif test -f /usr/include/event/event.h; then
+	     EVENTINC="-I/usr/include/event"
+	     EVENTLIB="-levent"
+	     havelibevent=yes
+	     echo "$ac_t""yes" 1>&6
+	  elif test -f /usr/include/event.h; then
+	     EVENTLIB="-levent"
+	     havelibevent=yes
+	     echo "$ac_t""yes" 1>&6
+	  else
+	     echo "$ac_t""no" 1>&6
+	  fi
+	
+	
 fi
 
 
+	if test $havelibevent = yes; then
+		
+		
 
-
+		GTKINC=`$PATH_GTKCONFIG --cflags`
+		GTKLIB=`$PATH_GTKCONFIG --libs`
+		
+		
+		XSTEG="xsteg"
+			
+	fi
 fi
 
 
 echo $ac_n "checking how to run the C preprocessor""... $ac_c" 1>&6
-echo "configure:1023: checking how to run the C preprocessor" >&5
+echo "configure:1032: checking how to run the C preprocessor" >&5
 # On Suns, sometimes $CPP names a directory.
 if test -n "$CPP" && test -d "$CPP"; then
   CPP=
@@ -1034,13 +1043,13 @@ else
   # On the NeXT, cc -E runs the code through the compiler's parser,
   # not just through cpp.
   cat > conftest.$ac_ext <<EOF
-#line 1038 "configure"
+#line 1047 "configure"
 #include "confdefs.h"
 #include <assert.h>
 Syntax Error
 EOF
 ac_try="$ac_cpp conftest.$ac_ext >/dev/null 2>conftest.out"
-{ (eval echo configure:1044: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
+{ (eval echo configure:1053: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
 ac_err=`grep -v '^ *+' conftest.out | grep -v "^conftest.${ac_ext}\$"`
 if test -z "$ac_err"; then
   :
@@ -1051,13 +1060,13 @@ else
   rm -rf conftest*
   CPP="${CC-cc} -E -traditional-cpp"
   cat > conftest.$ac_ext <<EOF
-#line 1055 "configure"
+#line 1064 "configure"
 #include "confdefs.h"
 #include <assert.h>
 Syntax Error
 EOF
 ac_try="$ac_cpp conftest.$ac_ext >/dev/null 2>conftest.out"
-{ (eval echo configure:1061: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
+{ (eval echo configure:1070: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
 ac_err=`grep -v '^ *+' conftest.out | grep -v "^conftest.${ac_ext}\$"`
 if test -z "$ac_err"; then
   :
@@ -1068,13 +1077,13 @@ else
   rm -rf conftest*
   CPP="${CC-cc} -nologo -E"
   cat > conftest.$ac_ext <<EOF
-#line 1072 "configure"
+#line 1081 "configure"
 #include "confdefs.h"
 #include <assert.h>
 Syntax Error
 EOF
 ac_try="$ac_cpp conftest.$ac_ext >/dev/null 2>conftest.out"
-{ (eval echo configure:1078: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
+{ (eval echo configure:1087: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
 ac_err=`grep -v '^ *+' conftest.out | grep -v "^conftest.${ac_ext}\$"`
 if test -z "$ac_err"; then
   :
@@ -1099,12 +1108,12 @@ fi
 echo "$ac_t""$CPP" 1>&6
 
 echo $ac_n "checking for ANSI C header files""... $ac_c" 1>&6
-echo "configure:1103: checking for ANSI C header files" >&5
+echo "configure:1112: checking for ANSI C header files" >&5
 if eval "test \"`echo '$''{'ac_cv_header_stdc'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1108 "configure"
+#line 1117 "configure"
 #include "confdefs.h"
 #include <stdlib.h>
 #include <stdarg.h>
@@ -1112,7 +1121,7 @@ else
 #include <float.h>
 EOF
 ac_try="$ac_cpp conftest.$ac_ext >/dev/null 2>conftest.out"
-{ (eval echo configure:1116: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
+{ (eval echo configure:1125: \"$ac_try\") 1>&5; (eval $ac_try) 2>&5; }
 ac_err=`grep -v '^ *+' conftest.out | grep -v "^conftest.${ac_ext}\$"`
 if test -z "$ac_err"; then
   rm -rf conftest*
@@ -1129,7 +1138,7 @@ rm -f conftest*
 if test $ac_cv_header_stdc = yes; then
   # SunOS 4.x string.h does not declare mem*, contrary to ANSI.
 cat > conftest.$ac_ext <<EOF
-#line 1133 "configure"
+#line 1142 "configure"
 #include "confdefs.h"
 #include <string.h>
 EOF
@@ -1147,7 +1156,7 @@ fi
 if test $ac_cv_header_stdc = yes; then
   # ISC 2.0.2 stdlib.h does not declare free, contrary to ANSI.
 cat > conftest.$ac_ext <<EOF
-#line 1151 "configure"
+#line 1160 "configure"
 #include "confdefs.h"
 #include <stdlib.h>
 EOF
@@ -1168,7 +1177,7 @@ if test "$cross_compiling" = yes; then
   :
 else
   cat > conftest.$ac_ext <<EOF
-#line 1172 "configure"
+#line 1181 "configure"
 #include "confdefs.h"
 #include <ctype.h>
 #define ISLOWER(c) ('a' <= (c) && (c) <= 'z')
@@ -1179,7 +1188,7 @@ if (XOR (islower (i), ISLOWER (i)) || toupper (i) != TOUPPER (i)) exit(2);
 exit (0); }
 
 EOF
-if { (eval echo configure:1183: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext} && (./conftest; exit) 2>/dev/null
+if { (eval echo configure:1192: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext} && (./conftest; exit) 2>/dev/null
 then
   :
 else
@@ -1204,12 +1213,12 @@ fi
 
 
 echo $ac_n "checking for size_t""... $ac_c" 1>&6
-echo "configure:1208: checking for size_t" >&5
+echo "configure:1217: checking for size_t" >&5
 if eval "test \"`echo '$''{'ac_cv_type_size_t'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1213 "configure"
+#line 1222 "configure"
 #include "confdefs.h"
 #include <sys/types.h>
 #if STDC_HEADERS
@@ -1237,12 +1246,12 @@ EOF
 fi
 
 echo $ac_n "checking for u_int32_t""... $ac_c" 1>&6
-echo "configure:1241: checking for u_int32_t" >&5
+echo "configure:1250: checking for u_int32_t" >&5
 if eval "test \"`echo '$''{'ac_cv_type_u_int32_t'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1246 "configure"
+#line 1255 "configure"
 #include "confdefs.h"
 #include <sys/types.h>
 #if STDC_HEADERS
@@ -1270,12 +1279,12 @@ EOF
 fi
 
 echo $ac_n "checking for u_int16_t""... $ac_c" 1>&6
-echo "configure:1274: checking for u_int16_t" >&5
+echo "configure:1283: checking for u_int16_t" >&5
 if eval "test \"`echo '$''{'ac_cv_type_u_int16_t'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1279 "configure"
+#line 1288 "configure"
 #include "confdefs.h"
 #include <sys/types.h>
 #if STDC_HEADERS
@@ -1303,12 +1312,12 @@ EOF
 fi
 
 echo $ac_n "checking for u_int8_t""... $ac_c" 1>&6
-echo "configure:1307: checking for u_int8_t" >&5
+echo "configure:1316: checking for u_int8_t" >&5
 if eval "test \"`echo '$''{'ac_cv_type_u_int8_t'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1312 "configure"
+#line 1321 "configure"
 #include "confdefs.h"
 #include <sys/types.h>
 #if STDC_HEADERS
@@ -1339,12 +1348,12 @@ fi
 for ac_func in strlcat strlcpy
 do
 echo $ac_n "checking for $ac_func""... $ac_c" 1>&6
-echo "configure:1343: checking for $ac_func" >&5
+echo "configure:1352: checking for $ac_func" >&5
 if eval "test \"`echo '$''{'ac_cv_func_$ac_func'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1348 "configure"
+#line 1357 "configure"
 #include "confdefs.h"
 /* System header to define __stub macros and hopefully few prototypes,
     which can conflict with char $ac_func(); below.  */
@@ -1367,7 +1376,7 @@ $ac_func();
 
 ; return 0; }
 EOF
-if { (eval echo configure:1371: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
+if { (eval echo configure:1380: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
   rm -rf conftest*
   eval "ac_cv_func_$ac_func=yes"
 else
@@ -1398,12 +1407,12 @@ needmd5=no
 for ac_func in MD5Update
 do
 echo $ac_n "checking for $ac_func""... $ac_c" 1>&6
-echo "configure:1402: checking for $ac_func" >&5
+echo "configure:1411: checking for $ac_func" >&5
 if eval "test \"`echo '$''{'ac_cv_func_$ac_func'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1407 "configure"
+#line 1416 "configure"
 #include "confdefs.h"
 /* System header to define __stub macros and hopefully few prototypes,
     which can conflict with char $ac_func(); below.  */
@@ -1426,7 +1435,7 @@ $ac_func();
 
 ; return 0; }
 EOF
-if { (eval echo configure:1430: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
+if { (eval echo configure:1439: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
   rm -rf conftest*
   eval "ac_cv_func_$ac_func=yes"
 else
@@ -1458,12 +1467,12 @@ neederr=no
 for ac_func in warnx
 do
 echo $ac_n "checking for $ac_func""... $ac_c" 1>&6
-echo "configure:1462: checking for $ac_func" >&5
+echo "configure:1471: checking for $ac_func" >&5
 if eval "test \"`echo '$''{'ac_cv_func_$ac_func'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   cat > conftest.$ac_ext <<EOF
-#line 1467 "configure"
+#line 1476 "configure"
 #include "confdefs.h"
 /* System header to define __stub macros and hopefully few prototypes,
     which can conflict with char $ac_func(); below.  */
@@ -1486,7 +1495,7 @@ $ac_func();
 
 ; return 0; }
 EOF
-if { (eval echo configure:1490: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
+if { (eval echo configure:1499: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
   rm -rf conftest*
   eval "ac_cv_func_$ac_func=yes"
 else
@@ -1516,9 +1525,9 @@ if test $neederr = yes; then
 fi
 
 echo $ac_n "checking for timeradd in sys/time.h""... $ac_c" 1>&6
-echo "configure:1520: checking for timeradd in sys/time.h" >&5
+echo "configure:1529: checking for timeradd in sys/time.h" >&5
 cat > conftest.$ac_ext <<EOF
-#line 1522 "configure"
+#line 1531 "configure"
 #include "confdefs.h"
 
 #include <sys/time.h>
@@ -1548,14 +1557,14 @@ cat >> confdefs.h <<EOF
 EOF
 
 echo $ac_n "checking whether byte ordering is bigendian""... $ac_c" 1>&6
-echo "configure:1552: checking whether byte ordering is bigendian" >&5
+echo "configure:1561: checking whether byte ordering is bigendian" >&5
 if eval "test \"`echo '$''{'ac_cv_c_bigendian'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
   ac_cv_c_bigendian=unknown
 # See if sys/param.h defines the BYTE_ORDER macro.
 cat > conftest.$ac_ext <<EOF
-#line 1559 "configure"
+#line 1568 "configure"
 #include "confdefs.h"
 #include <sys/types.h>
 #include <sys/param.h>
@@ -1566,11 +1575,11 @@ int main() {
 #endif
 ; return 0; }
 EOF
-if { (eval echo configure:1570: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
+if { (eval echo configure:1579: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
   rm -rf conftest*
   # It does; now see whether it defined to BIG_ENDIAN or not.
 cat > conftest.$ac_ext <<EOF
-#line 1574 "configure"
+#line 1583 "configure"
 #include "confdefs.h"
 #include <sys/types.h>
 #include <sys/param.h>
@@ -1581,7 +1590,7 @@ int main() {
 #endif
 ; return 0; }
 EOF
-if { (eval echo configure:1585: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
+if { (eval echo configure:1594: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
   rm -rf conftest*
   ac_cv_c_bigendian=yes
 else
@@ -1601,7 +1610,7 @@ if test "$cross_compiling" = yes; then
     { echo "configure: error: can not run test program while cross compiling" 1>&2; exit 1; }
 else
   cat > conftest.$ac_ext <<EOF
-#line 1605 "configure"
+#line 1614 "configure"
 #include "confdefs.h"
 main () {
   /* Are we little or big endian?  From Harbison&Steele.  */
@@ -1614,7 +1623,7 @@ main () {
   exit (u.c[sizeof (long) - 1] == 1);
 }
 EOF
-if { (eval echo configure:1618: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext} && (./conftest; exit) 2>/dev/null
+if { (eval echo configure:1627: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext} && (./conftest; exit) 2>/dev/null
 then
   ac_cv_c_bigendian=no
 else
@@ -1638,7 +1647,7 @@ EOF
 fi
 
 
-subdirs="jpeg-6b"
+subdirs="jpeg-6b file"
 
 
 trap '' 1 2 15
@@ -1795,11 +1804,11 @@ s%@INSTALL_SCRIPT@%$INSTALL_SCRIPT%g
 s%@INSTALL_DATA@%$INSTALL_DATA%g
 s%@BFOBJ@%$BFOBJ%g
 s%@PATH_GTKCONFIG@%$PATH_GTKCONFIG%g
+s%@EVENTINC@%$EVENTINC%g
+s%@EVENTLIB@%$EVENTLIB%g
 s%@GTKINC@%$GTKINC%g
 s%@GTKLIB@%$GTKLIB%g
 s%@XSTEG@%$XSTEG%g
-s%@EVENTINC@%$EVENTINC%g
-s%@EVENTLIB@%$EVENTLIB%g
 s%@CPP@%$CPP%g
 s%@LIBOBJS@%$LIBOBJS%g
 s%@subdirs@%$subdirs%g
@@ -2047,7 +2056,7 @@ if test "$no_recursion" != yes; then
     esac
   done
 
-  for ac_config_dir in jpeg-6b; do
+  for ac_config_dir in jpeg-6b file; do
 
     # Do not complain, so a configure script can configure whichever
     # parts of a large source tree are present.
