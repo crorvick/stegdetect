@@ -1,14 +1,5 @@
-/* config.h.in.  Generated automatically from configure.in by autoheader.  */
-
-/* Define to `unsigned' if <sys/types.h> doesn't define.  */
-#undef size_t
-
-/* Define if you have the ANSI C header files.  */
-#undef STDC_HEADERS
-
-/* Define if your processor stores words with the most significant
-   byte first (like Motorola and SPARC, unlike Intel and VAX).  */
-#undef WORDS_BIGENDIAN
+/* Define to `unsigned long long' if <sys/types.h> doesn't define.  */
+#undef u_int64_t
 
 /* Define to `unsigned int' if <sys/types.h> doesn't define.  */
 #undef u_int32_t
@@ -31,28 +22,17 @@
                         (vvp)->tv_usec -= 1000000;                      \
                 }                                                       \
         } while (0)
-#define timersub(tvp, uvp, vvp)      \
- do {        \
-  (vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;  \
-  (vvp)->tv_usec = (tvp)->tv_usec - (uvp)->tv_usec; \
-  if ((vvp)->tv_usec < 0) {    \
-   (vvp)->tv_sec--;    \
-   (vvp)->tv_usec += 1000000;   \
-  }       \
- } while (0)
+#define	timersub(tvp, uvp, vvp)						\
+	do {								\
+		(vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;		\
+		(vvp)->tv_usec = (tvp)->tv_usec - (uvp)->tv_usec;	\
+		if ((vvp)->tv_usec < 0) {				\
+			(vvp)->tv_sec--;				\
+			(vvp)->tv_usec += 1000000;			\
+		}							\
+	} while (0)
 #endif /* !HAVE_TIMERADD */
-
-/* Define if you have the MD5Update function.  */
-#undef HAVE_MD5UPDATE
-
-/* Define if you have the strlcat function.  */
-#undef HAVE_STRLCAT
-
-/* Define if you have the strlcpy function.  */
-#undef HAVE_STRLCPY
-
-/* Define if you have the warnx function.  */
-#undef HAVE_WARNX
+@BOTTOM@
 
 /* Prototypes for missing functions */
 #ifndef HAVE_STRLCAT

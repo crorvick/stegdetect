@@ -14,7 +14,7 @@
 .Op Fl s Ar float
 .Op Fl d Ar num
 .Op Fl t Ar tests
-.Ar file ...
+.Op Ar file ...
 .Sh DESCRIPTION
 The
 .Nm
@@ -46,16 +46,22 @@ Tests if information has been embedded with
 .It p
 Tests if information has been embedded with
 .Tn jphide .
+.It i
+Tests if information has been hidden with
+.Tn invisible secrets .
 .El
 .Pp
 The default value is
-.Va jop .
+.Va jopi .
 .El
 .Pp
 The
 .Nm
 utility indicates the accuracy of the detection with a number of stars
-behind the detected system.
+behind the detected system.  If no filenames have been specified,
+.Nm
+will read the filenames from
+.Dv stdin .
 .\" The following requests should be uncommented and used where appropriate.
 .Sh EXAMPLES
 .Cm stegdetect -t p auto.jpg

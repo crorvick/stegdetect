@@ -9,11 +9,13 @@ exec_prefix	= @exec_prefix@
 bindir		= @bindir@
 mandir		= @mandir@
 
-JPEGINC		= @JPEGINC@
-JPEGLIB		= @JPEGLIB@
+JPEGDIR		= ./jpeg-6b
+JPEGINC		= -I$(JPEGDIR)
+JPEGLIB		= -L$(JPEGDIR) -ljpeg
+JPEGDEP		= $(JPEGDIR)/libjpeg.a
 
 CC		= @CC@
-CFLAGS		= -Wall @CFLAGS@ $(JPEGINC)
+CFLAGS		= -Wall @CFLAGS@ $(JPEGINC) -I$(srcdir)/missing
 LDFLAGS		= @LDFLAGS@
 LIBS		= $(JPEGLIB)
 
@@ -21,23 +23,37 @@ INSTALL		= @INSTALL@
 INSTALL_PROG	= @INSTALL_PROGRAM@
 INSTALL_DATA	= @INSTALL_DATA@
 
-SRCS=		stegdetect.o chi2cdf.o
-OBJS=		$(SRCS:.c=.o) @LIBOBJS@
+CSRCS=		common.c jphide_table.c
+DSRCS=		stegdetect.c chi2cdf.c
+DOBJS=		$(DSRCS:.c=.o) $(CSRCS:.c=.o) @LIBOBJS@
 
 all: stegdetect
 
-stegdetect: $(OBJS)
-	$(CC) $(CFLAGS) $(INCS) -o $@ $(OBJS) $(LIBS)
+stegdetect: $(JPEGDEP) $(DOBJS)
+	$(CC) $(CFLAGS) $(INCS) -o $@ $(DOBJS) $(LIBS)
+
+$(JPEGDEP):
+	cd $(JPEGDIR); $(MAKE) libjpeg.a
 
 install: all
 	$(INSTALL_PROG) -m 755 stegdetect $(install_prefix)$(bindir)
 	$(INSTALL_DATA) stegdetect.1 $(install_prefix)$(mandir)/man1
 
 clean:
-	rm -f stegdetect *~ $(OBJS)
+	rm -f stegdetect *~ $(DOBJS)
 
 distclean: clean
+	cd $(JPEGDIR); $(MAKE) $@
 	rm -f Makefile config.h config.status config.cache config.log
 
 strlcat.o: $(srcdir)/missing/strlcat.c
 	$(CC) $(CFLAGS) -c $(srcdir)/missing/strlcat.c
+
+strlcpy.o: $(srcdir)/missing/strlcpy.c
+	$(CC) $(CFLAGS) -c $(srcdir)/missing/strlcpy.c
+
+err.o: $(srcdir)/missing/err.c
+	$(CC) $(CFLAGS) -c $(srcdir)/missing/err.c
+
+md5.o: $(srcdir)/missing/md5.c
+	$(CC) $(CFLAGS) -c $(srcdir)/missing/md5.c

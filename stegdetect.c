@@ -35,13 +35,13 @@
 #include <unistd.h>
 #include <err.h>
 #include <string.h>
-#include <setjmp.h>
 
 #include <jpeglib.h>
 
 #include "config.h"
+#include "common.h"
 
-#define VERSION "0.1"
+#define VERSION "0.2"
 
 #define DBG_PRINTHIST	0x0001
 #define DBG_CHIDIFF	0x0002
@@ -55,6 +55,7 @@
 #define FLAG_DOOUTGUESS	0x0001
 #define FLAG_DOJPHIDE	0x0002
 #define FLAG_DOJSTEG	0x0004
+#define FLAG_DOINVIS	0x0008
 
 float chi2cdf(float chi, int dgf);
 
@@ -64,27 +65,6 @@ float DCThist[257];
 float scale = 1;		/* Sensitivity scaling */
 
 int debug = 0;
-
-struct njvirt_barray_control {
-  JBLOCKARRAY mem_buffer;       /* => the in-memory buffer */
-  JDIMENSION rows_in_array;     /* total virtual array height */
-  JDIMENSION blocksperrow;      /* width of array (and of memory buffer) */
-  JDIMENSION maxaccess;         /* max rows accessed by access_virt_barray */
-  JDIMENSION rows_in_mem;       /* height of memory buffer */
-  JDIMENSION rowsperchunk;      /* allocation chunk size in mem_buffer */
-  JDIMENSION cur_start_row;     /* first logical row # in the buffer */
-  JDIMENSION first_undef_row;   /* row # of first uninitialized row */
-  boolean pre_zero;             /* pre-zero mode requested? */
-  boolean dirty;                /* do current buffer contents need written? */
-  boolean b_s_open;             /* is backing-store data valid? */
-  jvirt_barray_ptr next;        /* link to next virtual barray control block */
-  void *b_s_info;  /* System-dependent control info */
-};
-
-typedef struct njvirt_barray_control *njvirt_barray_ptr;
-
-JBLOCKARRAY dctcompbuf[MAX_COMPS_IN_SCAN];
-int hib[MAX_COMPS_IN_SCAN], wib[MAX_COMPS_IN_SCAN];
 
 void
 buildDCThist(short *data, int x, int y)
@@ -407,66 +387,6 @@ chi2test(short *data, int bits,
 	return (f * (1 - discard));
 }
 
-void
-prepare_normal(short **pdcts, int *pbits)
-{
-	int comp, row, col, val, bits, i;
-	short *dcts;
-
-	bits = 0;
-	for (comp = 0; comp < 3; comp++)
-		bits += hib[comp] * wib[comp] * DCTSIZE2;
-
-	dcts = malloc(bits * sizeof (short));
-	if (dcts == NULL)
-		err(1, "malloc");
-
-	bits = 0;
-	for (comp = 0; comp < 3; comp++) 
-		for (row = 0 ; row < hib[comp]; row++)
-			for (col = 0; col < wib[comp]; col++)
-				for (i = 0; i < DCTSIZE2; i++) {
-					val = dctcompbuf[comp][row][col][i];
-					
-					/* Skip 0 and 1 coeffs */
-					if ((val & 1) == val)
-						continue;
-
-					dcts[bits++] = val;
-				}
-
-	*pdcts = dcts;
-	*pbits = bits;
-}
-
-void
-prepare_jphide(short **pdcts, int *pbits)
-{
-	int comp, row, col, val, bits, i;
-	short *dcts;
-
-	bits = 0;
-	for (comp = 0; comp < 3; comp++)
-		bits += hib[comp] * wib[comp] * DCTSIZE2;
-
-	dcts = malloc(bits * sizeof (short));
-	if (dcts == NULL)
-		err(1, "malloc");
-
-	bits = 0;
-	for (comp = 0; comp < 3; comp++) 
-		for (row = 0 ; row < hib[comp]; row++)
-			for (col = 0; col < wib[comp]; col++)
-				for (i = 0; i < DCTSIZE2; i++) {
-					val = dctcompbuf[comp][row][col][i];
-
-					dcts[bits++] = val;
-				}
-
-	*pdcts = dcts;
-	*pbits = bits;
-}
-
 #define BINSEARCHVAR \
 	float _max, _min, _good; \
 	int _iteration
@@ -508,11 +428,13 @@ prepare_jphide(short **pdcts, int *pbits)
 int
 histogram_chi_jsteg(short *data, int bits)
 {
-	int off;
+	int off, length, minlen, maxlen;
 	float f, sum, percent, i, count, where;
 	float max, aftercount, scale, fs, start;
 	BINSEARCHVAR;
 
+	if (bits == 0)
+		goto abort;
 	start = 100*400/bits;
 	if (start >= 7)
 		goto abort;
@@ -582,17 +504,22 @@ histogram_chi_jsteg(short *data, int bits)
 				i, f * 100);
 	}
 
-	if (debug & DBG_ENDVAL)
+	length = jsteg_size(data, bits, NULL);
+	minlen = where*bits/100/8;
+	maxlen = (where+1)*bits/100/8;
+	if (debug & DBG_ENDVAL) {
 		fprintf(stdout,
-			"Accumulation (%4.1f%%): %f%% - %f (%f) (%d - %d)\n",
-			percent, sum * 100, aftercount*100, count,
-			(int)(where*bits/100/8),
-			(int)((where+1)*bits/100/8));
+		    "Accumulation (%4.1f%%): %f%% - %f (%f) (%d:%d - %d)\n",
+		    percent, sum * 100, aftercount*100, count,
+		    length, minlen, maxlen);
+	}
 
 	if (aftercount > 0)
 		sum -= aftercount;
 	/* Require a positive sum and at least two working samples */
 	if (sum < 0 || count < 3)
+		sum = 0;
+	if (length < minlen/2 || length > maxlen*2)
 		sum = 0;
 
 	return (scale * sum / (2 * percent));
@@ -701,31 +628,33 @@ histogram_chi_jphide(short *data, int bits)
 	BINSEARCH(1, 10, 7) {
 		range = percent*bits/100;
 		sum = 0;
-		for (i = 0; i <= 100; i ++) {
+		for (i = 1; i <= 100; i ++) {
 			off = i*bits/100;
 			f = chi2test(data, bits, unify_false_jphide,
-				     off - range, off + range);
+				     0, off);
 			sum += f;
 			if ((debug & DBG_CHI) && f != 0)
 				fprintf(stdout, "%04d[:] %8.5f%%\n",
 					i, f * 100);
 		}
 
-		BINSEARCH_NEXT(0.1);
+		BINSEARCH_NEXT(3);
 	}
 
-	/* XXX */
 	BINSEARCH_IFABORT(10)
 		return (0);
 
 	range = percent * bits/100;
 	sum = 0;
-	for (i = 0; i <= 100; i ++) {
+	for (i = 1; i <= 100; i ++) {
 		off = i*bits/100;
 		f = chi2test(data, bits, unify_jphide,
-			     off - range, off + range);
+			     0, off);
 		if (f > 0.3)
 			sum += f;
+		else if (f < 0.2)
+			break;
+
 		if ((debug & DBG_CHI) && f != 0)
 			fprintf(stdout, "%04d: %8.5f%%\n", i, f * 100);
 	}
@@ -735,7 +664,57 @@ histogram_chi_jphide(short *data, int bits)
 			percent,
 			sum * 100);
 
-	return (scale * sum / 10);
+	return (scale * sum / 7);
+}
+
+#define RANGE	500
+#define ADAPT	0.2
+
+void
+histogram_test(short *data, int bits)
+{
+	int i;
+	float ratio;
+	int runsum, which = -1, currun;
+	int lastsum;
+	int one;
+
+	one = 0;
+	ratio = 0.5;
+	runsum = 0;
+	lastsum = 0;
+	currun = 0;
+
+	for (i = 0; i < bits; i++) {
+		if (which != (abs(data[i]) & 1)) {
+			which = abs(data[i]) & 1;
+			runsum += currun * currun;
+			currun = 0;
+		} else
+			currun ++;
+
+		if (abs(data[i]) & 1)
+			one++;
+		if (i && (i % RANGE == 0)) {
+			ratio = (1-ADAPT)*ratio + ADAPT*(float)one/RANGE;
+			one = 0;
+
+			runsum += currun * currun;
+			if (lastsum == 0)
+				lastsum = runsum;
+			else
+				lastsum = (1-ADAPT)*lastsum + ADAPT*runsum;
+			
+			fprintf(stdout, "%7.3f: %8.3f %5.3f\n",
+				(float)i/bits*100,
+				(float)lastsum / RANGE,
+				ratio);
+
+			which = -1;
+			currun = 0;
+			runsum = 0;
+		}
+	}
 }
 
 #define RLE_MAX 1024
@@ -795,9 +774,8 @@ histogram_rle(short *data, int bits)
 void
 usage(void)
 {
-
 	fprintf(stderr,
-		"Usage: %s [-V] [-s <float>] [-d <num>] [-t <tests>] file.jpg ...\n",
+		"Usage: %s [-V] [-s <float>] [-d <num>] [-t <tests>] [file.jpg ...]\n",
 		progname);
 }
 
@@ -817,109 +795,67 @@ quality(char *prepend, int q)
 	return (quality);
 }
 
-struct my_error_mgr {
-	struct jpeg_error_mgr pub;    /* "public" fields */
-
-	jmp_buf setjmp_buffer;        /* for return to caller */
-};
-
-typedef struct my_error_mgr * my_error_ptr;
-
-/*
- * Here's the routine that will replace the standard error_exit method:
- */
-
-METHODDEF(void)
-my_error_exit (j_common_ptr cinfo)
-{
-	my_error_ptr myerr = (my_error_ptr) cinfo->err;
-
-	/* Return control to the setjmp point */
-	longjmp(myerr->setjmp_buffer, 1);
-}
-
 void
 detect(char *filename, int scans)
 {
-	struct jpeg_decompress_struct jinfo;
-	struct my_error_mgr jerr;
-	njvirt_barray_ptr *dctcoeff;
-	jpeg_component_info *compptr;
 	char outbuf[1024];
-	FILE *fin;
-	int i, bits;
+	int bits, jbits;
 	int res, flag;
-	short *dcts;
+	short *dcts, *jdcts;
 
-
-	if ((fin = fopen(filename, "r")) == NULL)
-		err(1, "fopen");
-
-	jinfo.err = jpeg_std_error(&jerr.pub);
-	jerr.pub.error_exit = my_error_exit;
-	/* Establish the setjmp return context for my_error_exit to use. */
-	if (setjmp(jerr.setjmp_buffer)) {
-		/* Always display the message. */
-		(*jinfo.err->format_message) ((j_common_ptr)&jinfo, outbuf);
-
-		fprintf(stderr, "%s : error: %s\n", filename, outbuf);
-
-		/* If we get here, the JPEG code has signaled an error.
-		 * We need to clean up the JPEG object, close the input file,
-		 * and return.
-		 */
-		jpeg_destroy_decompress(&jinfo);
-
-		fclose(fin);
-		return;
-	}
-	jpeg_create_decompress(&jinfo);
-	jpeg_stdio_src(&jinfo, fin);
-	jpeg_read_header(&jinfo, TRUE);
-
-	jinfo.quantize_colors = TRUE;
-	dctcoeff = (njvirt_barray_ptr *)jpeg_read_coefficients(&jinfo);
-
-	fclose(fin);
-
-	if (jinfo.out_color_space != JCS_RGB) {
-		fprintf(stderr, "%s : error: is not a RGB image\n", filename);
-		goto out;
-	}
- 
-	i = jinfo.num_components;
-	if (i != 3) {
-		fprintf(stderr,
-			"%s : error: wrong number of color components: %d\n",
-			filename, i);
-		goto out;
+	if (scans & FLAG_DOJSTEG) {
+		prepare_jsteg(&jdcts, &jbits);
 	}
 	
-	bits = 0;
-	for(i = 0; i < 3; i++) {
-		compptr = jinfo.cur_comp_info[i];
-		/*
-		fprintf(stderr,
-			"input_iMCU_row: %d, v_samp_factor: %d\n",
-			jinfo.input_iMCU_row * compptr->v_samp_factor,
-			(JDIMENSION) compptr->v_samp_factor);
-
-		fprintf(stderr, "hib: %d, wib: %d\n",
-			jinfo.comp_info[i].height_in_blocks,
-			jinfo.comp_info[i].width_in_blocks);
-		*/
-		wib[i] = jinfo.comp_info[i].width_in_blocks;
-		hib[i] = jinfo.comp_info[i].height_in_blocks;
-		dctcompbuf[i] = dctcoeff[0]->mem_buffer;
-
-		bits += wib[i] * hib[i] * DCTSIZE2;
+	if (jpg_open(filename) == -1) {
+		if (jdcts != NULL)
+			free(jdcts);
+		return;
 	}
 
+	if (scans & FLAG_DOJSTEG) {
+		stego_set_callback(NULL, ORDER_MCU);
+	}
+	
 	flag = 0;
 	sprintf(outbuf, "%s :", filename);
 
+	if (scans & FLAG_DOINVIS) {
+		extern u_char *comments[];
+		extern size_t commentsize[];
+		extern int ncomments;
+		u_char *p;
+		u_int32_t length;
+
+		if (ncomments < 2)
+			goto no_invisiblesecrets;
+
+		/* Check first file */
+		p = comments[1];
+		length = p[3] << 24;
+		length |= p[2] << 16;
+		length |= p[1] << 8;
+		length |= p[0];
+
+		if (commentsize[1] == length + 4) {
+			char tmp[128];
+
+			flag = 1;
+			snprintf(tmp, sizeof(tmp), " invisible(%d)", length);
+			strlcat(outbuf, tmp, sizeof(outbuf));
+		}
+		
+	no_invisiblesecrets:
+	}
+	
 	if (scans & FLAG_DOJSTEG) {
-		prepare_normal(&dcts, &bits);
+		/* Set via the callback */
+		dcts = jdcts;
+		bits = jbits;
+
+		if (dcts == NULL)
+			goto jsteg_error;
+		
 		res = histogram_chi_jsteg(dcts, bits);
 		if (res > 0) {
 			strlcat(outbuf, quality(" jsteg", res),
@@ -942,6 +878,7 @@ detect(char *filename, int scans)
 		}
 
 		free(dcts);
+	jsteg_error:
 	}
 
 	if (scans & FLAG_DOOUTGUESS) {
@@ -971,9 +908,8 @@ detect(char *filename, int scans)
 
 	fprintf(stdout, "%s\n", outbuf);
 
-	jpeg_finish_decompress(&jinfo);
- out:
-	jpeg_destroy_decompress(&jinfo);
+	jpg_finish();
+	jpg_destroy();
 }
 
 int
@@ -986,7 +922,7 @@ main(int argc, char *argv[])
 
 	progname = argv[0];
 
-	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG;
+	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG | FLAG_DOINVIS;
 
 	/* read command line arguments */
 	while ((ch = getopt(argc, argv, "s:Vd:t:")) != -1)
@@ -1016,6 +952,9 @@ main(int argc, char *argv[])
 				case 'p':
 					scans |= FLAG_DOJPHIDE;
 					break;
+				case 'i':
+					scans |= FLAG_DOINVIS;
+					break;
 				default:
 					usage();
 					exit(1);
@@ -1029,16 +968,20 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
-	if (argc < 1) {
-		usage();
-		exit(1);
-	}
+	setvbuf(stdout, NULL, _IOLBF, 0);
 
-	while (argc) {
-		detect(argv[0], scans);
+	if (argc > 0) {
+		while (argc) {
+			detect(argv[0], scans);
+			
+			argc--;
+			argv++;
+		}
+	} else {
+		char line[1024];
 
-		argc--;
-		argv++;
+		while (fgetl(line, sizeof(line), stdin) != NULL)
+			detect(line, scans);
 	}
 
 	exit(0);
