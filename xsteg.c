@@ -54,6 +54,7 @@
 #define FLAG_DOJPHIDE	0x0002
 #define FLAG_DOJSTEG	0x0004
 #define FLAG_DOINVIS	0x0008
+#define FLAG_DOF5	0x0010
 
 extern int (*event_sigcb)(void);
 extern int event_gotsig;
@@ -69,7 +70,7 @@ pid_t sd_pid = -1;
 int chld_stdin, chld_stdout, chld_stderr;
 struct event ev_stdin, ev_stdout, ev_stderr;
 
-int scans = FLAG_DOOUTGUESS|FLAG_DOJPHIDE|FLAG_DOJSTEG|FLAG_DOINVIS;
+int scans = FLAG_DOOUTGUESS|FLAG_DOJPHIDE|FLAG_DOJSTEG|FLAG_DOINVIS|FLAG_DOF5;
 float sensitivity = 1.0;
 
 struct filequeue filelist;
@@ -146,6 +147,8 @@ select_scan(GtkWidget *widget, gpointer data)
 		which = FLAG_DOOUTGUESS;
 	else if (!strcmp(name, "invisible"))
 		which = FLAG_DOINVIS;
+	else if (!strcmp(name, "f5"))
+		which = FLAG_DOF5;
 	else
 		return;
 	
@@ -603,13 +606,14 @@ make_colors(void)
 char *
 make_scan_arg(void)
 {
-	static char tmp[8];
+	static char tmp[9];
 
-	snprintf(tmp, sizeof(tmp), "-t%s%s%s%s",
+	snprintf(tmp, sizeof(tmp), "-t%s%s%s%s%s",
 	    scans & FLAG_DOJSTEG ? "j" : "",
 	    scans & FLAG_DOJPHIDE ? "p" : "",
 	    scans & FLAG_DOOUTGUESS ? "o" : "",
-	    scans & FLAG_DOINVIS ? "i" : "");
+	    scans & FLAG_DOINVIS ? "i" : "",
+	    scans & FLAG_DOF5 ? "f" : "");
 
 	return (tmp);
 }
@@ -980,6 +984,9 @@ main(int argc, char *argv[] )
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), 1);
 	button = create_scan_button(vboxscans, "invisible");
 	if (scans & FLAG_DOINVIS)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), 1);
+	button = create_scan_button(vboxscans, "F5");
+	if (scans & FLAG_DOF5)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), 1);
 
 	gtk_tooltips_set_tip(GTK_TOOLTIPS(tips), eventbox,

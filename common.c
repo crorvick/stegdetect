@@ -37,6 +37,7 @@
 #include <setjmp.h>
 
 #include <jpeglib.h>
+#include <jerror.h>
 
 #include "config.h"
 #include "jphide_table.h"
@@ -149,6 +150,14 @@ comments_free(void)
 	for (i = 0; i < ncomments; i++)
 		free(comments[i]);
 	ncomments = 0;
+}
+
+void (*stego_eoi_cb)(void *) = NULL;
+
+void
+stego_set_eoi_callback(void (*cb)(void *))
+{
+	stego_eoi_cb = cb;
 }
 
 void
@@ -506,6 +515,25 @@ my_error_exit (j_common_ptr cinfo)
 	longjmp(myerr->setjmp_buffer, 1);
 }
 
+METHODDEF(void)
+my_error_emit (j_common_ptr cinfo, int level)
+{
+	j_decompress_ptr dinfo = (j_decompress_ptr)cinfo;
+	if (cinfo->err->msg_code != JTRC_EOI)
+		return;
+
+	if (dinfo->src->bytes_in_buffer == 0) {
+		dinfo->src->fill_input_buffer(dinfo);
+
+		/* If we get only two bytes, its a fake EOI from library */
+		if (dinfo->src->bytes_in_buffer == 2)
+			return;
+	}
+
+	/* Give the information to the user */
+	(*stego_eoi_cb)(dinfo);
+}
+
 void
 jpg_finish(void)
 {
@@ -550,6 +578,8 @@ jpg_open(char *filename)
 
 	jinfo.err = jpeg_std_error(&jerr.pub);
 	jerr.pub.error_exit = my_error_exit;
+	if (stego_eoi_cb != NULL)
+		jerr.pub.emit_message = my_error_emit;
 	/* Establish the setjmp return context for my_error_exit to use. */
 	if (setjmp(jerr.setjmp_buffer)) {
 		/* Always display the message. */

@@ -57,5 +57,6 @@ extern int hib[], wib[];
 enum order { ORDER_MCU, ORDER_NATURAL };
 
 void stego_set_callback(void (*)(int, short), enum order);
+void stego_set_eoi_callback(void (*cb)(void *));
 
 #endif /* _COMMON_ */

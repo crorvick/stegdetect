@@ -35,13 +35,16 @@
 #include <unistd.h>
 #include <err.h>
 #include <string.h>
+#include <math.h>
+#include <ctype.h>
 
 #include <jpeglib.h>
+#include <file.h>
 
 #include "config.h"
 #include "common.h"
 
-#define VERSION "0.4"
+#define VERSION "0.5"
 
 #define DBG_PRINTHIST	0x0001
 #define DBG_CHIDIFF	0x0002
@@ -58,6 +61,7 @@
 #define FLAG_DOJSTEG	0x0004
 #define FLAG_DOINVIS	0x0008
 #define FLAG_DOF5	0x0010
+#define FLAG_DOAPPEND	0x0020
 #define FLAG_CHECKHDRS	0x1000
 #define FLAG_JPHIDESTAT	0x2000
 
@@ -68,8 +72,8 @@ char *progname;
 float DCThist[257];
 float scale = 1;		/* Sensitivity scaling */
 
-int debug = 0;
-int quiet = 0;
+static int debug = 0;
+static int quiet = 0;
 
 static short *olddata;
 static int oldx, oldy;
@@ -933,6 +937,88 @@ histogram_chi_jphide_old(short *data, int bits)
 	return (scale * sum / 7);
 }
 
+char detect_buffer[4096];
+size_t detect_buflen;
+
+/* Copy data into buffer */
+
+#define DETECT_MINAPPEND	128
+
+void
+detect_append(void *arg)
+{
+	j_decompress_ptr dinfo = arg;
+
+	u_char *buf = (u_char *)dinfo->src->next_input_byte;
+	size_t buflen = dinfo->src->bytes_in_buffer;
+
+	if (buflen > sizeof(detect_buffer))
+		buflen = sizeof(detect_buffer);
+
+	memcpy(detect_buffer, buf, buflen);
+	detect_buflen = buflen;
+
+	if (buflen < DETECT_MINAPPEND) {
+		int len;
+
+		dinfo->src->fill_input_buffer(dinfo);
+		len = dinfo->src->bytes_in_buffer;
+		if (len <= 2)
+			goto out;
+
+		if (len >= sizeof(detect_buffer) - detect_buflen)
+			len = sizeof(detect_buffer) - detect_buflen;
+		memcpy(detect_buffer, dinfo->src->next_input_byte, len);
+		detect_buflen += len;
+	}
+
+ out:
+	if (detect_buflen < 4)
+		detect_buflen = 0;
+}
+
+void
+detect_print(void)
+{
+	int i;
+	extern int noprint;
+	u_char *buf = detect_buffer;
+	size_t buflen = detect_buflen;
+	char *what = "appended";
+
+	if (buflen > 2 + 16 + 4) {
+		for (i = 2; i < 2 + 16 + 4; i++)
+			if (buf[i]) {
+				i = 0;
+				break;
+			}
+		if (i == 0 && !memcmp(buf + 2, buf + 18, 4)) {
+			what = "camouflage";
+			goto done;
+		}
+	}
+
+	if (buflen > 4) {
+		u_char compare[] = {0x80, 0x3f, 0xe0, 0x50};
+		if (!memcmp(buf, compare, 4)) {
+			what = "alpha-channel";
+			goto done;
+		}
+	}
+ done:
+	fprintf(stdout, " %s(%d)<[%s][", what,
+	    buflen, is_random(buf, buflen) ? "random" : "nonrandom");
+	noprint = 0;
+	/* Prints to stdout */
+	file_process(buf, buflen);
+	noprint = 1;
+	fprintf(stdout, "][");
+	for (i = 0; i < 16 && i < buflen; i++)
+		fprintf(stdout, "%c",
+		    isprint(buf[i]) ? buf[i] : '.');
+	fprintf(stdout, "]> ");
+}
+
 #define RANGE	500
 #define ADAPT	0.2
 
@@ -1077,11 +1163,19 @@ detect(char *filename, int scans)
 		prepare_jsteg(&jdcts, &jbits);
 	}
 	
+	if (scans & FLAG_DOAPPEND) {
+		detect_buflen = 0;
+		stego_set_eoi_callback(detect_append);
+	}
+
 	if (jpg_open(filename) == -1) {
 		if (jdcts != NULL)
 			free(jdcts);
 		return;
 	}
+
+	if (scans & FLAG_DOAPPEND)
+		stego_set_eoi_callback(NULL);
 
 	if (scans & FLAG_DOJSTEG) {
 		stego_set_callback(NULL, ORDER_MCU);
@@ -1089,6 +1183,11 @@ detect(char *filename, int scans)
 	
 	flag = 0;
 	sprintf(outbuf, "%s :", filename);
+
+	if (scans & FLAG_DOAPPEND) {
+		if (detect_buflen)
+			flag = 1;
+	}
 
 	if (scans & FLAG_DOF5) {
 		if (ncomments != 1 || commentsize[0] != 63)
@@ -1206,12 +1305,37 @@ detect(char *filename, int scans)
 	}
 
 	if ((scans & FLAG_DOOUTGUESS) && prepare_normal(&dcts, &bits) != -1) {
-		res = histogram_chi_outguess(dcts, bits);
-		if (res) {
-			strlcat(outbuf, quality(" outguess(old)", res),
-				sizeof(outbuf));
-			flag = 1;
+		short *ndcts;
+		int i, j, n, off, step;
+
+		ndcts = malloc(bits * sizeof(short));
+		if (ndcts == NULL)
+			err(1, "malloc");
+
+		step = sqrt(bits);
+		n = 1;
+		while (n < step) {
+			off = 0;
+			if (n > 1) {
+				for (i = 0; i < n; i++) {
+					for (j = i; j < bits; j += n) {
+						ndcts[off++] = dcts[j];
+					}
+				}
+			} else
+				memcpy(ndcts, dcts, bits * sizeof(short));
+			res = histogram_chi_outguess(ndcts, bits);
+			if (res) {
+				strlcat(outbuf, quality(n == 1 ?
+					    " outguess(old)" : " outguess",
+					    res),
+				    sizeof(outbuf));
+				flag = 1;
+				break;
+			}
+			n *= 2;
 		}
+		free(ndcts);
 		free(dcts);
 	}
 
@@ -1230,8 +1354,12 @@ detect(char *filename, int scans)
 	if (!flag)
 		strlcat(outbuf, " negative", sizeof(outbuf));
 
-	if (flag > 0 || !quiet)
-		fprintf(stdout, "%s\n", outbuf);
+	if (flag > 0 || !quiet) {
+		fprintf(stdout, "%s", outbuf);
+		if ((scans && FLAG_DOAPPEND) && detect_buflen)
+			detect_print();
+		fprintf(stdout, "\n");
+	}
 
 	jpg_finish();
 	jpg_destroy();
@@ -1248,7 +1376,7 @@ main(int argc, char *argv[])
 	progname = argv[0];
 
 	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG | FLAG_DOINVIS |
-	    FLAG_DOF5;
+	    FLAG_DOF5 | FLAG_DOAPPEND;
 
 	/* read command line arguments */
 	while ((ch = getopt(argc, argv, "ns:Vd:t:q")) != -1)
@@ -1290,6 +1418,9 @@ main(int argc, char *argv[])
 				case 'f':
 					scans |= FLAG_DOF5;
 					break;
+				case 'a':
+					scans |= FLAG_DOAPPEND;
+					break;
 				default:
 					usage();
 					exit(1);
@@ -1300,6 +1431,10 @@ main(int argc, char *argv[])
 			exit(1);
 		}
 	
+	/* Set up magic rules */
+	if (file_init())
+		errx(1, "file magic initializiation failed");
+
 	if (checkhdr)
 		scans |= FLAG_CHECKHDRS;
 

@@ -48,8 +48,8 @@ PROGS=		stegdetect stegbreak @XSTEG@
 
 all: $(PROGS)
 
-stegdetect: $(JPEGDEP) $(DOBJS)
-	$(CC) $(CFLAGS) $(INCS) -o $@ $(DOBJS) $(LIBS)
+stegdetect: $(JPEGDEP) $(DOBJS) $(FILEDEP)
+	$(CC) $(CFLAGS) $(INCS) -o $@ $(DOBJS) -lm $(LIBS) $(FILELIB)
 
 stegbreak: $(JPEGDEP) $(FILEDEP) $(BOBJS)
 	$(CC) -static $(CFLAGS) $(INCS) -o $@ $(BOBJS) $(LIBS) $(FILELIB)
@@ -102,3 +102,6 @@ err.o: $(srcdir)/missing/err.c
 
 md5.o: $(srcdir)/missing/md5.c
 	$(CC) $(CFLAGS) -c $(srcdir)/missing/md5.c
+
+dirname.o: $(srcdir)/missing/dirname.c
+	$(CC) $(CFLAGS) -c $(srcdir)/missing/dirname.c

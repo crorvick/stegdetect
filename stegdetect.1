@@ -56,10 +56,19 @@ Tests if information has been embedded with
 .It i
 Tests if information has been hidden with
 .Tn invisible secrets .
+.It f
+Tests if information has been hidden with
+.Tn F5 .
+.It a
+Tests if information has been added at the end of file, for example
+by
+.Tn camouflage
+or
+.Tn appendX .
 .El
 .Pp
 The default value is
-.Va jopi .
+.Va jopifa .
 .El
 .Pp
 The
@@ -91,6 +100,12 @@ knob is the sensitivity level.  Future versions will export all detection
 parameters via a configuration file.
 .Sh SEE ALSO
 .Xr stegbreak 1
+.Sh ACKNOWLEDGEMENTS
+This product includes software developed by Ian F. Darwin and others.
+The
+.Nm
+utility uses Darwin's file magic to identify data appended at the end of
+an image.
 .Sh AUTHORS
 The
 .Nm

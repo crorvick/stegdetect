@@ -89,7 +89,26 @@ AC_CHECK_TYPE(u_int16_t, unsigned short)
 AC_CHECK_TYPE(u_int8_t, unsigned char)
 
 dnl Checks for library functions.
-AC_REPLACE_FUNCS(strlcat strlcpy)
+AC_REPLACE_FUNCS(strlcat strlcpy dirname)
+
+if test "x$ac_cv_func_dirname" = "xyes"; then
+	AC_MSG_CHECKING(for working dirname)
+	AC_TRY_RUN(
+#include <sys/types.h>
+#include <string.h>
+int
+main(int argc, char **argv)
+{
+	char *name = "solaris/sucks";
+	char *p;
+	int len = strlen(name);
+	p = dirname(name);
+	exit(len != strlen(name));
+}, AC_MSG_RESULT(yes), [
+	AC_MSG_RESULT(no)
+	LIBOBJS="$LIBOBJS dirname.o"
+], AC_MSG_RESULT(yes))
+fi
 
 needmd5=no
 AC_CHECK_FUNCS(MD5Update, , [needmd5=yes])
