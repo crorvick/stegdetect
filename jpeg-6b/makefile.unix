@@ -102,6 +102,9 @@ TROBJECTS= jpegtran.o rdswitch.o cdjpeg.o transupp.o
 
 all: ansi2knr libjpeg.a cjpeg djpeg jpegtran rdjpgcom wrjpgcom
 
+distdir:
+	@echo "ignoring distdir"
+
 # This rule causes ansi2knr to be invoked.
 .c.o:
 	./ansi2knr $*.c T$*.c

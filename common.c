@@ -85,7 +85,7 @@ jpeg_getc(j_decompress_ptr cinfo)
 
 	if (datasrc->bytes_in_buffer == 0) {
 		if (! (*datasrc->fill_input_buffer) (cinfo))
-			err(1, __FUNCTION__": fill_input");
+			err(1, "%s: fill_input", __FUNCTION__);
 	}
 	datasrc->bytes_in_buffer--;
 	return GETJOCTET(*datasrc->next_input_byte++);
@@ -174,31 +174,6 @@ stego_set_callback(void (*cb)(int, short), enum order order)
 		stego_natural_order = cb;
 		break;
 	}
-}
-
-char *
-fgetl(char *s, int size, FILE *stream)
-{
-        char *res, *pos;
-        int c;
-
-        if ((res = fgets(s, size, stream))) {
-                if (!*res) return res;
-
-                pos = res + strlen(res) - 1;
-                if (*pos == '\n') {
-                        *pos = 0;
-                        if (pos > res)
-				if (*--pos == '\r') *pos = 0;
-                } else
-			if ((c = getc(stream)) == '\n') {
-				if (*pos == '\r') *pos = 0;
-			} else
-				while (c != EOF && c != '\n')
-					c = getc(stream);
-        }
-
-        return (res);
 }
 
 short **pjdcts, *cbdcts;
@@ -297,7 +272,7 @@ prepare_all(short **pdcts, int *pbits)
 
 	dcts = malloc(bits * sizeof (short));
 	if (dcts == NULL) {
-		warn(__FUNCTION__": malloc");
+		warn("%s: malloc", __FUNCTION__);
 		return (-1);
 	}
 
@@ -307,6 +282,43 @@ prepare_all(short **pdcts, int *pbits)
 			for (col = 0; col < wib[comp]; col++)
 				for (i = 0; i < DCTSIZE2; i++) {
 					val = dctcompbuf[comp][row][col][i];
+					
+					dcts[bits++] = val;
+				}
+
+	*pdcts = dcts;
+	*pbits = bits;
+
+	return (0);
+}
+
+int
+prepare_all_gradx(short **pdcts, int *pbits)
+{
+	int comp, row, col, val, bits, i;
+	short *dcts;
+
+	bits = 0;
+	for (comp = 0; comp < 3; comp++) {
+		if (wib[comp] - 1 <= 0)
+			errx(1, "image too small");
+
+		bits += hib[comp] * (wib[comp] - 1) * DCTSIZE2;
+	}
+
+	dcts = malloc(bits * sizeof (short));
+	if (dcts == NULL) {
+		warn("%s: malloc", __FUNCTION__);
+		return (-1);
+	}
+
+	bits = 0;
+	for (comp = 0; comp < 3; comp++) 
+		for (row = 0 ; row < hib[comp]; row++)
+			for (col = 0; col < wib[comp] - 1; col++)
+				for (i = 0; i < DCTSIZE2; i++) {
+					val = dctcompbuf[comp][row][col][i] -
+					    dctcompbuf[comp][row][col + 1][i];
 					
 					dcts[bits++] = val;
 				}
@@ -362,7 +374,7 @@ prepare_normal(short **pdcts, int *pbits)
 	if (pdcts != NULL) {
 		dcts = malloc(bits * sizeof (short));
 		if (dcts == NULL) {
-			warn(__FUNCTION__": malloc");
+			warn("%s: malloc", __FUNCTION__);
 			return (-1);
 		}
 	}
@@ -410,7 +422,7 @@ prepare_jphide(short **pdcts, int *pbits)
 		/* XXX - wasteful */
 		back[comp] = calloc(off, sizeof (char));
 		if (back[comp] == NULL) {
-			warn(__FUNCTION__": calloc");
+			warn("%s: calloc", __FUNCTION__);
 			goto err;
 		}
 	}
@@ -418,7 +430,7 @@ prepare_jphide(short **pdcts, int *pbits)
 	if (pdcts != NULL) {
 		dcts = malloc(mbits * sizeof (short));
 		if (dcts == NULL) {
-			warn(__FUNCTION__": malloc");
+			warn("%s: malloc", __FUNCTION__);
 			goto err;
 		}
 	}
@@ -557,6 +569,62 @@ jpg_version(int *major, int *minor, u_int16_t *markers)
 }
 
 int
+jpg_toimage(char *filename, struct image *image)
+{
+	JSAMPARRAY buf;
+	int rowstep;
+	struct jpeg_decompress_struct jinfo;
+	struct jpeg_error_mgr jerr;
+	FILE *fin;
+
+	if ((fin = fopen(filename, "r")) == NULL) {
+		int error = errno;
+
+		fprintf(stderr, "%s : error: %s\n",
+			filename, strerror(error));
+		return (-1);
+	}
+
+	jinfo.err = jpeg_std_error(&jerr);
+	jpeg_create_decompress(&jinfo);
+	jpeg_stdio_src(&jinfo, fin);
+	jpeg_read_header(&jinfo, TRUE);
+
+	jinfo.do_fancy_upsampling = FALSE;
+	jinfo.do_block_smoothing = FALSE;
+
+	jpeg_start_decompress(&jinfo);
+
+	image->x = jinfo.output_width;
+	image->y = jinfo.output_height;
+	image->depth = jinfo.output_components;
+	image->max = 255;
+
+	image->img = malloc(jinfo.output_width * jinfo.output_height *
+	    jinfo.output_components);
+
+	if (image->img == NULL)
+		err(1, "%s: malloc", __FUNCTION__);
+
+	rowstep = jinfo.output_width * jinfo.output_components;
+
+	buf = (jinfo.mem->alloc_sarray)((j_common_ptr) &jinfo, JPOOL_IMAGE, rowstep, 1);
+
+	while (jinfo.output_scanline < jinfo.output_height) {
+		jpeg_read_scanlines(&jinfo, buf, 1);
+
+		memcpy(&image->img[(jinfo.output_scanline-1)*rowstep],
+		    buf[0], rowstep);
+	}
+
+	fclose(fin);
+	jpeg_finish_decompress(&jinfo);
+	jpeg_destroy_decompress(&jinfo);
+
+	return (0);
+}
+
+int
 jpg_open(char *filename)
 {
 	char outbuf[1024];
@@ -603,7 +671,7 @@ jpg_open(char *filename)
 	jpeg_stdio_src(&jinfo, fin);
 	jpeg_read_header(&jinfo, TRUE);
 
-	jinfo.quantize_colors = TRUE;
+	/* jinfo.quantize_colors = TRUE; */
 	dctcoeff = (njvirt_barray_ptr *)jpeg_read_coefficients(&jinfo);
 
 	fclose(fin);

@@ -9,9 +9,9 @@
 gcc2_compiled.:
 .text
 	.align 4
-.globl _BF_encrypt
-	.type	_BF_encrypt,@function
-_BF_encrypt:
+.globl BF_encrypt
+	.type	BF_encrypt,@function
+BF_encrypt:
 
 	pushl	%ebp
 	pushl	%ebx
@@ -356,14 +356,14 @@ _BF_encrypt:
 	popl	%ebx
 	popl	%ebp
 	ret
-._BF_encrypt_end:
-	.size	_BF_encrypt,._BF_encrypt_end-_BF_encrypt
-.ident	"_BF_encrypt"
+.BF_encrypt_end:
+	.size	BF_encrypt,.BF_encrypt_end-BF_encrypt
+.ident	"BF_encrypt"
 .text
 	.align 4
-.globl _BF_decrypt
-	.type	_BF_decrypt,@function
-_BF_decrypt:
+.globl BF_decrypt
+	.type	BF_decrypt,@function
+BF_decrypt:
 
 	pushl	%ebp
 	pushl	%ebx
@@ -708,14 +708,14 @@ _BF_decrypt:
 	popl	%ebx
 	popl	%ebp
 	ret
-._BF_decrypt_end:
-	.size	_BF_decrypt,._BF_decrypt_end-_BF_decrypt
-.ident	"_BF_decrypt"
+.BF_decrypt_end:
+	.size	BF_decrypt,.BF_decrypt_end-BF_decrypt
+.ident	"BF_decrypt"
 .text
 	.align 4
-.globl _BF_cbc_encrypt
-	.type	_BF_cbc_encrypt,@function
-_BF_cbc_encrypt:
+.globl BF_cbc_encrypt
+	.type	BF_cbc_encrypt,@function
+BF_cbc_encrypt:
 
 	pushl	%ebp
 	pushl	%ebx
@@ -756,7 +756,7 @@ _BF_cbc_encrypt:
 .byte 203		# bswapl  %ebx 
 	movl	%eax,		8(%esp)
 	movl	%ebx,		12(%esp)
-	call	_BF_encrypt
+	call	BF_encrypt
 	movl	8(%esp),	%eax
 	movl	12(%esp),	%ebx
 .byte 15
@@ -803,7 +803,7 @@ _BF_cbc_encrypt:
 .byte 203		# bswapl  %ebx 
 	movl	%eax,		8(%esp)
 	movl	%ebx,		12(%esp)
-	call	_BF_encrypt
+	call	BF_encrypt
 	movl	8(%esp),	%eax
 	movl	12(%esp),	%ebx
 .byte 15
@@ -828,7 +828,7 @@ _BF_cbc_encrypt:
 .byte 203		# bswapl  %ebx 
 	movl	%eax,		8(%esp)
 	movl	%ebx,		12(%esp)
-	call	_BF_decrypt
+	call	BF_decrypt
 	movl	8(%esp),	%eax
 	movl	12(%esp),	%ebx
 .byte 15
@@ -861,7 +861,7 @@ _BF_cbc_encrypt:
 .byte 203		# bswapl  %ebx 
 	movl	%eax,		8(%esp)
 	movl	%ebx,		12(%esp)
-	call	_BF_decrypt
+	call	BF_decrypt
 	movl	8(%esp),	%eax
 	movl	12(%esp),	%ebx
 .byte 15
@@ -926,6 +926,6 @@ _BF_cbc_encrypt:
 	.long .L017dj5
 	.long .L016dj6
 	.long .L015dj7
-.L__BF_cbc_encrypt_end:
-	.size	_BF_cbc_encrypt,.L__BF_cbc_encrypt_end-_BF_cbc_encrypt
+.L_BF_cbc_encrypt_end:
+	.size	BF_cbc_encrypt,.L_BF_cbc_encrypt_end-BF_cbc_encrypt
 .ident	"desasm.pl"

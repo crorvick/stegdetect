@@ -1,5 +1,5 @@
 /*
- * Copyright 2001 Niels Provos <provos@citi.umich.edu>
+ * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,43 +28,29 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _COMMON_
-#define _COMMON_
+#ifndef _DISCRIMINATION_
+#define _DISCRIMINATION_
 
-struct image {
-	int x, y, depth, max;
-	u_char *img;
-};
+void cd_init(void);
 
-void jpg_finish(void);
-void jpg_destroy(void);
-int jpg_open(char *);
-void jpg_version(int *, int *, u_int16_t *);
+struct cd_decision;
+void cd_insert(struct cd_decision *);
+struct cd_decision *cd_iterate(struct cd_decision *);
 
-int jpg_toimage(char *, struct image *);
+struct cd_decision *cd_new(void);
+int cd_process_file(struct cd_decision *, char *);
+void cd_compute(struct cd_decision *, char *name, int);
+void cd_test(struct cd_decision *);
+int cd_classify(struct cd_decision *, double *);
+void cd_setboundary(struct cd_decision *, double);
 
-int prepare_all(short **, int *);
-int prepare_all_gradx(short **, int *);
-int prepare_normal(short **, int *);
-int prepare_jphide(short **, int *);
-int prepare_jsteg(short **, int *);
-int jsteg_size(short *, int, int *);
-int prepare_outguess(short **, int *);
+char *cd_name(struct cd_decision *);
 
-char *fgetl(char *, int, FILE *);
-int file_hasextension(char *, char *);
+void cd_dump(FILE *, struct cd_decision *);
+struct cd_decision *cd_read(FILE *);
 
-int is_random(u_char *, int);
+transform_t cd_transform(struct cd_decision *);
 
-#define TEST_BIT(x,y)		((x)[(y) / 32] & (1 << ((y) & 31)))
-#define WRITE_BIT(x,y,what)	((x)[(y) / 32] = ((x)[(y) / 32] & \
-				~(1 << ((y) & 31))) | ((what) << ((y) & 31)))
+void matrix_invert(double **, int);
 
-extern int hib[], wib[];
-
-enum order { ORDER_MCU, ORDER_NATURAL };
-
-void stego_set_callback(void (*)(int, short), enum order);
-void stego_set_eoi_callback(void (*cb)(void *));
-
-#endif /* _COMMON_ */
+#endif /* _DISCRIMINATION_ */

@@ -1,6 +1,6 @@
-# Makefile.in generated automatically by automake 1.4 from Makefile.am
+# Makefile.in generated automatically by automake 1.4-p6 from Makefile.am
 
-# Copyright (C) 1994, 1995-8, 1999 Free Software Foundation, Inc.
+# Copyright (C) 1994, 1995-8, 1999, 2001 Free Software Foundation, Inc.
 # This Makefile.in is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -83,7 +83,7 @@ man_MANS = file.1 $(man_MAGIC)
 libfile_a_SOURCES = file.c apprentice.c fsmagic.c softmagic.c ascmagic.c 	compress.c is_tar.c readelf.c print.c 	file.h names.h patchlevel.h readelf.h tar.h magic.c
 
 
-EXTRA_DIST = LEGAL.NOTICE MAINT PORTING Makefile.std magic2mime 	Localstuff Header $(magic_FRAGMENTS) file.man magic.man
+EXTRA_DIST = LEGAL.NOTICE MAINT Makefile.std magic2mime 	Localstuff Header $(magic_FRAGMENTS) file.man magic.man magic.mime
 
 
 CLEANFILES = $(man_MANS) magic magic.inc
@@ -505,7 +505,7 @@ magic: Header Localstuff $(magic_FRAGMENTS)
 
 magic.inc: magic
 	echo -n "\"" > $@
-	sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g' magic >> $@
+	sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g' -e 's/$$/\ \\/' magic >> $@
 	echo -n "\"" >> $@
 
 file.1:	Makefile file.man

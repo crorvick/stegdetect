@@ -162,7 +162,7 @@ break_jsteg_prepare(char *filename, short *dcts, int bits)
 	jstegob->skip = bytes - sizeof(jstegob->coeff);
 
 	if (jsbits < max || off + jsbits > bits) {
-		warnx(__FUNCTION__": bad size in bits, %d", bits);
+		warnx("%s: bad size in bits, %d", __FUNCTION__, bits);
 		return (NULL);
 	}
 

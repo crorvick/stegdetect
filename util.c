@@ -28,43 +28,36 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _COMMON_
-#define _COMMON_
+#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <err.h>
+#include <string.h>
 
-struct image {
-	int x, y, depth, max;
-	u_char *img;
-};
+#include "config.h"
 
-void jpg_finish(void);
-void jpg_destroy(void);
-int jpg_open(char *);
-void jpg_version(int *, int *, u_int16_t *);
+char *
+fgetl(char *s, int size, FILE *stream)
+{
+        char *res, *pos;
+        int c;
 
-int jpg_toimage(char *, struct image *);
+        if ((res = fgets(s, size, stream))) {
+                if (!*res) return res;
 
-int prepare_all(short **, int *);
-int prepare_all_gradx(short **, int *);
-int prepare_normal(short **, int *);
-int prepare_jphide(short **, int *);
-int prepare_jsteg(short **, int *);
-int jsteg_size(short *, int, int *);
-int prepare_outguess(short **, int *);
+                pos = res + strlen(res) - 1;
+                if (*pos == '\n') {
+                        *pos = 0;
+                        if (pos > res)
+				if (*--pos == '\r') *pos = 0;
+                } else
+			if ((c = getc(stream)) == '\n') {
+				if (*pos == '\r') *pos = 0;
+			} else
+				while (c != EOF && c != '\n')
+					c = getc(stream);
+        }
 
-char *fgetl(char *, int, FILE *);
-int file_hasextension(char *, char *);
-
-int is_random(u_char *, int);
-
-#define TEST_BIT(x,y)		((x)[(y) / 32] & (1 << ((y) & 31)))
-#define WRITE_BIT(x,y,what)	((x)[(y) / 32] = ((x)[(y) / 32] & \
-				~(1 << ((y) & 31))) | ((what) << ((y) & 31)))
-
-extern int hib[], wib[];
-
-enum order { ORDER_MCU, ORDER_NATURAL };
-
-void stego_set_callback(void (*)(int, short), enum order);
-void stego_set_eoi_callback(void (*cb)(void *));
-
-#endif /* _COMMON_ */
+        return (res);
+}

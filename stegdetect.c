@@ -29,6 +29,9 @@
  */
 
 #include <sys/types.h>
+
+#include "config.h"
+
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,10 +44,9 @@
 #include <jpeglib.h>
 #include <file.h>
 
-#include "config.h"
 #include "common.h"
-
-#define VERSION "0.5"
+#include "extraction.h"
+#include "discrimination.h"
 
 #define DBG_PRINTHIST	0x0001
 #define DBG_CHIDIFF	0x0002
@@ -61,11 +63,15 @@
 #define FLAG_DOJSTEG	0x0004
 #define FLAG_DOINVIS	0x0008
 #define FLAG_DOF5	0x0010
-#define FLAG_DOAPPEND	0x0020
+#define FLAG_DOF5_SLOW	0x0020
+#define FLAG_DOAPPEND	0x0040
+#define FLAG_DOTRANSF	0x0080
+#define FLAG_DOCLASSDIS	0x0100
 #define FLAG_CHECKHDRS	0x1000
 #define FLAG_JPHIDESTAT	0x2000
 
 float chi2cdf(float chi, int dgf);
+double detect_f5(char *);
 
 char *progname;
 
@@ -74,9 +80,12 @@ float scale = 1;		/* Sensitivity scaling */
 
 static int debug = 0;
 static int quiet = 0;
+static int ispositive = 0;	/* Current images contain stego */
+static char *transformname;	/* Current transform name */
 
 static short *olddata;
 static int oldx, oldy;
+static transform_t transform;
 
 void
 buildDCTreset(void)
@@ -281,7 +290,7 @@ unify_outguess(float *hist, float *theo, float *obs, float *pdiscard)
 		 * have reduced the difference significantly.
 		 */
 		if ((fbar > f/4) &&
-		    ((f - f/3) - (fbar + f/3) > 10)) {
+		    ((f - f/3) - (fbar + f/3) > 0)) {
 			if ((debug & DBG_CHIDIFF) && (one || two))
 				fprintf(stdout,
 					"%4d: %8.3f - %8.3f skipped (%f)\n",
@@ -335,27 +344,10 @@ unify_jphide(float *hist, float *theo, float *obs, float *discard)
 
 
 float
-chi2test(short *data, int bits,
-	 int (*unify)(float *, float *, float *, float *),
-	 int a, int b)
+chi2(float *DCTtheo, float *DCTobs, int size, float discard)
 {
-	float DCTtheo[128];
-	float DCTobs[128];
-	float chi, sumchi, ymt, ytt, f, discard;
-	int i, dgf, size;
-
-	if (a < 0)
-		a = 0;
-	if (b > bits)
-		b = bits;
-
-	if (a >= b)
-		return (-1);
-
-	buildDCThist(data, a, b);
-
-	discard = 0;
-	size = (*unify)(DCThist, DCTtheo, DCTobs, &discard);
+	int i, dgf;
+	float chi, sumchi, ymt, ytt, f;
 
 	ymt = ytt = 0;
 	sumchi = 0;
@@ -403,6 +395,30 @@ chi2test(short *data, int bits,
 	}
 
 	return (f * (1 - discard));
+}
+
+float
+chi2test(short *data, int bits,
+	 int (*unify)(float *, float *, float *, float *),
+	 int a, int b)
+{
+	float DCTtheo[128], DCTobs[128], discard;
+	int size;
+
+	if (a < 0)
+		a = 0;
+	if (b > bits)
+		b = bits;
+
+	if (a >= b)
+		return (-1);
+
+	buildDCThist(data, a, b);
+
+	discard = 0;
+	size = (*unify)(DCThist, DCTtheo, DCTobs, &discard);
+
+	return (chi2(DCTtheo, DCTobs, size, discard));
 }
 
 #define BINSEARCHVAR \
@@ -515,7 +531,7 @@ histogram_chi_jsteg(short *data, int bits)
 		if ((debug & DBG_CHI) &&
 		    ((debug & DBG_PRINTZERO) || f != 0))
 			fprintf(stdout, "%04f: %8.5f%%\n",
-				i/8, f * 100);
+				i, f * 100);
 	}
 
 	length = jsteg_size(data, bits, NULL);
@@ -572,7 +588,7 @@ histogram_chi_outguess(short *data, int bits)
 	float f, sum, norm;
 	BINSEARCHVAR;
 
-	BINSEARCH(1, 10, 7) {
+	BINSEARCH(0.1, 10, 9) {
 		range = percent*bits/100;
 		sum = 0;
 		for (i = 0; i <= 100; i ++) {
@@ -585,13 +601,12 @@ histogram_chi_outguess(short *data, int bits)
 					i, f * 100);
 		}
 
-		BINSEARCH_NEXT(0.3);
+		BINSEARCH_NEXT(0.6);
 	}
 
 	/* XXX */
 	BINSEARCH_IFABORT(10)
 		return (0);
-
 	range = percent*bits/100;
 	count = 0;
 	sum = 0;
@@ -937,6 +952,31 @@ histogram_chi_jphide_old(short *data, int bits)
 	return (scale * sum / 7);
 }
 
+float
+histogram_f5(float *hist, int size)
+{
+	int i, n;
+	float DCTtheo[8], DCTobs[8];
+	float mean;
+
+	if (size < 63)
+		return (0);
+
+	n = 4;
+	for (i = 0; i < n; i++) {
+		DCTobs[i] = hist[i*8];
+		mean = hist[i*8 + 1];
+		if (i != 0) {
+			float tmp;
+			tmp = hist[i*8 - 1];
+			mean = (mean + tmp)/2;
+		}
+		DCTtheo[i] = mean;
+	}
+
+	return (chi2(DCTtheo, DCTobs, n, 0));
+}
+
 char detect_buffer[4096];
 size_t detect_buflen;
 
@@ -1019,115 +1059,35 @@ detect_print(void)
 	fprintf(stdout, "]> ");
 }
 
-#define RANGE	500
-#define ADAPT	0.2
-
 void
-histogram_test(short *data, int bits)
+class_discrimination(char *filename, int positive)
 {
-	int i;
-	float ratio;
-	int runsum, which = -1, currun;
-	int lastsum;
-	int one;
+	double *points;
+	short *dcts = NULL;
+	int bits, i, npoints;
 
-	one = 0;
-	ratio = 0.5;
-	runsum = 0;
-	lastsum = 0;
-	currun = 0;
+	if (prepare_all(&dcts, &bits) == -1)
+		err(1, "prepare_all");
 
-	for (i = 0; i < bits; i++) {
-		if (which != (abs(data[i]) & 1)) {
-			which = abs(data[i]) & 1;
-			runsum += currun * currun;
-			currun = 0;
-		} else
-			currun ++;
+	points = transform(dcts, bits, &npoints);
 
-		if (abs(data[i]) & 1)
-			one++;
-		if (i && (i % RANGE == 0)) {
-			ratio = (1-ADAPT)*ratio + ADAPT*(float)one/RANGE;
-			one = 0;
+	fprintf(stdout, "%s:%d,%s: ", filename, positive, transformname);
 
-			runsum += currun * currun;
-			if (lastsum == 0)
-				lastsum = runsum;
-			else
-				lastsum = (1-ADAPT)*lastsum + ADAPT*runsum;
-			
-			fprintf(stdout, "%7.3f: %8.3f %5.3f\n",
-				(float)i/bits*100,
-				(float)lastsum / RANGE,
-				ratio);
-
-			which = -1;
-			currun = 0;
-			runsum = 0;
-		}
-	}
-}
-
-#define RLE_MAX 1024
-
-void
-histogram_rle(short *data, int bits)
-{
-	int run, which, i;
-	int hist[3][RLE_MAX], score[3], sum[3];
-
-	which = 3;
-	run = 0;
-
-	memset(hist, 0, sizeof(hist));
-
-	for (i = 0; i < bits; i++) {
-		if (data[i] < -1 || data[i] > 1)
-			continue;
-		if (data[i] != which) {
-			if (run > RLE_MAX)
-				run = RLE_MAX - 1;
-			if (which != 3) {
-				hist[which + 1][run]++;
-			}
-			which = data[i];
-			run = 0;
-		}
-
-		run++;
+	for (i = 0; i < npoints; i++) {
+		fprintf(stdout, "%.8f ", points[i]);
 	}
 
-	score[0] = sum[0] = 0;
-	score[1] = sum[1] = 0;
-	score[2] = sum[2] = 0;
-	for (i = 0; i < RLE_MAX; i++) {
-		score[0] += hist[0][i] * i * i;
-		sum[0] += hist[0][i] * i;
-		score[1] += hist[1][i] * i * i;
-		sum[1] += hist[1][i] * i;
-		score[2] += hist[2][i] * i * i;
-		sum[2] += hist[2][i] * i;
+	fprintf(stdout, "\n");
 
-		if (hist[0][i] + hist[1][i] + hist[2][i] == 0)
-			continue;
-
-		fprintf(stdout, "%4d: %5d %5d %5d\n",
-			i, hist[0][i], hist[1][i], hist[2][i]);
-	}
-
-	fprintf(stderr, "-1: %10.3f 0: %10.3f 1: %10.3f\n",
-		score[0]/(float)sum[0],
-		score[1]/(float)sum[1],
-		score[2]/(float)sum[2]
-		);
+	free(dcts);
 }
 
 void
 usage(void)
 {
 	fprintf(stderr,
-		"Usage: %s [-nqV] [-s <float>] [-d <num>] [-t <tests>] [file.jpg ...]\n",
+	    "Usage: %s [-nqV] [-s <float>] [-d <num>] [-t <tests>] [-C <num>]\n"
+	    "\t [file.jpg ...]\n",
 		progname);
 }
 
@@ -1148,6 +1108,30 @@ quality(char *prepend, int q)
 }
 
 void
+dohistogram(char *filename)
+{
+	short *dcts = NULL;
+	int bits;
+
+	if (jpg_open(filename) == -1)
+		return;
+
+	fprintf(stdout, "%s ->\n", filename);
+
+	if (prepare_all(&dcts, &bits) == -1)
+		goto end;
+
+	buildDCThist(dcts, 0, bits);
+
+	free(dcts);
+
+
+ end:
+	jpg_finish();
+	jpg_destroy();
+}
+
+void
 detect(char *filename, int scans)
 {
 	extern u_char *comments[];
@@ -1158,6 +1142,7 @@ detect(char *filename, int scans)
 	int res, flag;
 	short *jdcts = NULL;
 	short *dcts = NULL;
+	int a_wasted_var;
 
 	if (scans & FLAG_DOJSTEG) {
 		prepare_jsteg(&jdcts, &jbits);
@@ -1172,6 +1157,11 @@ detect(char *filename, int scans)
 		if (jdcts != NULL)
 			free(jdcts);
 		return;
+	}
+
+	if (scans & FLAG_DOTRANSF) {
+		class_discrimination(filename, ispositive);
+		goto end;
 	}
 
 	if (scans & FLAG_DOAPPEND)
@@ -1189,16 +1179,56 @@ detect(char *filename, int scans)
 			flag = 1;
 	}
 
-	if (scans & FLAG_DOF5) {
-		if (ncomments != 1 || commentsize[0] != 63)
-			goto no_f5;
-		if (strcmp(comments[0], "JPEG Encoder Copyright 1998, James R. Weeks and BioElectroMech."))
-			goto no_f5;
-		
-		flag = 1;
-		strlcat(outbuf, " f5(***)", sizeof(outbuf));
+	if (scans & FLAG_DOCLASSDIS) {
+		struct cd_decision *cdd;
+		double *points;
+		int npoints;
 
+		if (prepare_all(&dcts, &bits) == -1)
+			err(1, "prepare_all");
+
+		for (cdd = cd_iterate(NULL); cdd; cdd = cd_iterate(cdd)) {
+			transform_t transform = cd_transform(cdd);
+			points = transform(dcts, bits, &npoints);
+			res = cd_classify(cdd, points);
+
+			if (!res)
+				continue;
+
+			flag = 1;
+			strlcat(outbuf, " ", sizeof(outbuf));
+			strlcat(outbuf, cd_name(cdd), sizeof(outbuf));
+			strlcat(outbuf, "(**)", sizeof(outbuf));
+		}
+
+		free(dcts);
+	}
+
+	if (scans & FLAG_DOF5) {
+		if (ncomments == 1 && commentsize[0] == 63 &&
+		    !strcmp(comments[0], "JPEG Encoder Copyright 1998, James R. Weeks and BioElectroMech.")) {
+			flag = 1;
+			strlcat(outbuf, " f5(***)", sizeof(outbuf));
+		} else if (scans & FLAG_DOF5_SLOW) {
+			double beta = detect_f5(filename);
+			char tmp[80];
+			int stars;
+
+			if (beta < 0.25)
+				goto no_f5;
+
+			stars = 1;
+			if (beta > 0.25)
+				stars++;
+			if (beta > 0.4)
+				stars++;
+
+			snprintf(tmp, sizeof(tmp), " f5[%f]", beta);
+			strlcat(outbuf, quality(tmp, stars), sizeof(outbuf));
+			flag = 1;
+		}
 	no_f5:
+	a_wasted_var = 0;
 	}
 
 	if (scans & FLAG_DOINVIS) {
@@ -1238,6 +1268,7 @@ detect(char *filename, int scans)
 		}
 		
 	no_invisiblesecrets:
+	a_wasted_var = 0;
 	}
 
 	if ((scans & FLAG_CHECKHDRS)) {
@@ -1302,6 +1333,7 @@ detect(char *filename, int scans)
 
 		free(dcts);
 	jsteg_error:
+	a_wasted_var = 0;
 	}
 
 	if ((scans & FLAG_DOOUTGUESS) && prepare_normal(&dcts, &bits) != -1) {
@@ -1314,7 +1346,7 @@ detect(char *filename, int scans)
 
 		step = sqrt(bits);
 		n = 1;
-		while (n < step) {
+		while (n < 2 /* step */) {
 			off = 0;
 			if (n > 1) {
 				for (i = 0; i < n; i++) {
@@ -1360,7 +1392,7 @@ detect(char *filename, int scans)
 			detect_print();
 		fprintf(stdout, "\n");
 	}
-
+ end:
 	jpg_finish();
 	jpg_destroy();
 }
@@ -1368,7 +1400,9 @@ detect(char *filename, int scans)
 int
 main(int argc, char *argv[])
 {
-	int i, scans, checkhdr = 0;
+	int i, scans, checkhdr = 0, usecd = 0, histonly = 0;
+	struct cd_decision *cdd = NULL;
+	FILE *fin;
 	extern char *optarg;
 	extern int optind;
 	int ch;
@@ -1378,9 +1412,56 @@ main(int argc, char *argv[])
 	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG | FLAG_DOINVIS |
 	    FLAG_DOF5 | FLAG_DOAPPEND;
 
+	cd_init();
+
 	/* read command line arguments */
-	while ((ch = getopt(argc, argv, "ns:Vd:t:q")) != -1)
+	while ((ch = getopt(argc, argv, "C:D:c:nhs:Vd:t:q")) != -1)
 		switch((char)ch) {
+		case 'h':
+			histonly = 1;
+			break;
+		case 'c':
+			if (cdd == NULL)
+				cdd = cd_new();
+			cd_process_file(cdd, optarg);
+			usecd = 1;
+			break;
+		case 'D':
+			if ((fin = fopen(optarg, "r")) == NULL)
+				err(1, "fopen: %s", optarg);
+			cdd = cd_read(fin);
+			if (cdd == NULL)
+				errx(1, "Invalid detection file");
+			fclose(fin);
+			cd_insert(cdd);
+			break;
+		case 'C': {
+			char *strnum, *strtrans, *p;
+			
+			p = optarg;
+			strnum = strsep(&p, ",");
+			strtrans = strsep(&p, ",");
+
+			if (strnum == NULL || strtrans == NULL ||
+			    !isdigit(*optarg)) {
+				usage();
+				exit(1);
+			}
+
+			if ((transform = transform_lookup(strtrans)) == NULL) {
+				fprintf(stderr, "Unknown transform \"%s\"\n",
+				    strtrans);
+				usage();
+				exit(1);
+			}
+			
+			scans = FLAG_DOTRANSF;
+			
+			ispositive = atoi(optarg);
+			if ((transformname = strdup(strtrans)) == NULL)
+				err(1, "strdup");
+			break;
+		}
 		case 'n':
 			checkhdr = 1;
 			break;
@@ -1418,6 +1499,9 @@ main(int argc, char *argv[])
 				case 'f':
 					scans |= FLAG_DOF5;
 					break;
+				case 'F':
+					scans |= FLAG_DOF5 | FLAG_DOF5_SLOW;
+					break;
 				case 'a':
 					scans |= FLAG_DOAPPEND;
 					break;
@@ -1441,11 +1525,47 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
+	if (usecd) {
+		char *name;
+
+		if (argc > 0)
+			name = argv[0];
+		else
+			name = "<unknown program>";
+
+		cd_compute(cdd, name, 1);
+		cd_test(cdd);
+
+		cd_compute(cdd, name, 0);
+		cd_dump(stdout, cdd);
+		exit(0);
+	}
+
+	if (cd_iterate(NULL) != NULL)
+		scans |= FLAG_DOCLASSDIS;
+
+	/* Adjust sensitivity */
+	for (cdd = cd_iterate(NULL); cdd; cdd = cd_iterate(cdd)) {
+		double where;
+
+		if (scale < 0)
+			where = 0;
+		else if (scale < 1)
+			where = scale / 2;
+		else
+			where = 1 - 1 / (2 * scale);
+
+		cd_setboundary(cdd, 1 - where);
+	}
+
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	if (argc > 0) {
 		while (argc) {
-			detect(argv[0], scans);
+			if (histonly)
+				dohistogram(argv[0]);
+			else
+				detect(argv[0], scans);
 			
 			argc--;
 			argv++;
@@ -1454,7 +1574,10 @@ main(int argc, char *argv[])
 		char line[1024];
 
 		while (fgetl(line, sizeof(line), stdin) != NULL)
-			detect(line, scans);
+			if (histonly)
+				dohistogram(line);
+			else
+				detect(line, scans);
 	}
 
 	if (debug & FLAG_JPHIDESTAT) {

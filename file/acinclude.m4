@@ -30,7 +30,7 @@ AC_CACHE_CHECK([for tm_zone in struct tm], ac_cv_struct_tm_zone,
 #include <$ac_cv_struct_tm>], [struct tm tm; tm.tm_zone;],
   ac_cv_struct_tm_zone=yes, ac_cv_struct_tm_zone=no)])
 if test "$ac_cv_struct_tm_zone" = yes; then
-  AC_DEFINE(HAVE_TM_ZONE)
+  AC_DEFINE(HAVE_TM_ZONE, 1, [Define if you have tm_size])
 fi
 AC_CACHE_CHECK(for tzname, ac_cv_var_tzname,
 [AC_TRY_LINK(
@@ -42,7 +42,7 @@ extern char *tzname[]; /* RS6000 and others reject char **tzname.  */
 changequote([, ])dnl
 [atoi(*tzname);], ac_cv_var_tzname=yes, ac_cv_var_tzname=no)])
   if test $ac_cv_var_tzname = yes; then
-    AC_DEFINE(HAVE_TZNAME)
+    AC_DEFINE(HAVE_TZNAME, 1, [Define if you have tzname])
   fi
 
 AC_CACHE_CHECK([for tm_isdst in struct tm], ac_cv_struct_tm_isdst,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001 Niels Provos <provos@citi.umich.edu>
+ * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,44 +27,40 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef _UTIL_H_
+#define _UTIL_H_
 
-#ifndef _COMMON_
-#define _COMMON_
+void print_block(short *);
 
-struct image {
-	int x, y, depth, max;
-	u_char *img;
+void dequant_block(short *, short *, JQUANT_TBL *);
+void quant_block(short *, short *, JQUANT_TBL *);
+
+void effective_change(short *, short *, short *, JQUANT_TBL *);
+void effective_result(short *, short *, short *, JQUANT_TBL *);
+
+int count_edge(short *);
+int count_all(short *);
+
+struct jeasy *jpeg_prepare_blocks(struct jpeg_decompress_struct *);
+void jpeg_return_blocks(struct jeasy *, struct jpeg_decompress_struct *);
+void jpeg_free_blocks(struct jeasy *);
+
+void statistic(struct jeasy *);
+
+double variance(short *);
+
+int diff_vertical(short *, short *);
+int diff_horizontal(short *, short *);
+
+struct jeasy {
+	int comp;
+	int height[MAX_COMPS_IN_SCAN];
+	int width[MAX_COMPS_IN_SCAN];
+	struct jpeg_decompress_struct *jinfo;
+	JQUANT_TBL *table[MAX_COMPS_IN_SCAN];
+	short ***blocks;
+	int needscale;
+	double scale[MAX_COMPS_IN_SCAN];
 };
 
-void jpg_finish(void);
-void jpg_destroy(void);
-int jpg_open(char *);
-void jpg_version(int *, int *, u_int16_t *);
-
-int jpg_toimage(char *, struct image *);
-
-int prepare_all(short **, int *);
-int prepare_all_gradx(short **, int *);
-int prepare_normal(short **, int *);
-int prepare_jphide(short **, int *);
-int prepare_jsteg(short **, int *);
-int jsteg_size(short *, int, int *);
-int prepare_outguess(short **, int *);
-
-char *fgetl(char *, int, FILE *);
-int file_hasextension(char *, char *);
-
-int is_random(u_char *, int);
-
-#define TEST_BIT(x,y)		((x)[(y) / 32] & (1 << ((y) & 31)))
-#define WRITE_BIT(x,y,what)	((x)[(y) / 32] = ((x)[(y) / 32] & \
-				~(1 << ((y) & 31))) | ((what) << ((y) & 31)))
-
-extern int hib[], wib[];
-
-enum order { ORDER_MCU, ORDER_NATURAL };
-
-void stego_set_callback(void (*)(int, short), enum order);
-void stego_set_eoi_callback(void (*cb)(void *));
-
-#endif /* _COMMON_ */
+#endif;

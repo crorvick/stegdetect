@@ -21,8 +21,8 @@ libfile_a_SOURCES = file.c apprentice.c fsmagic.c softmagic.c ascmagic.c \
 	compress.c is_tar.c readelf.c print.c \
 	file.h names.h patchlevel.h readelf.h tar.h magic.c
 
-EXTRA_DIST = LEGAL.NOTICE MAINT PORTING Makefile.std magic2mime \
-	Localstuff Header $(magic_FRAGMENTS) file.man magic.man
+EXTRA_DIST = LEGAL.NOTICE MAINT Makefile.std magic2mime \
+	Localstuff Header $(magic_FRAGMENTS) file.man magic.man magic.mime
 
 CLEANFILES = $(man_MANS) magic magic.inc
 
@@ -39,7 +39,7 @@ magic: Header Localstuff $(magic_FRAGMENTS)
 
 magic.inc: magic
 	echo -n "\"" > $@
-	sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g' magic >> $@
+	sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g' -e 's/$$/\ \\/' magic >> $@
 	echo -n "\"" >> $@
 
 file.1:	Makefile file.man

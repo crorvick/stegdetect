@@ -53,8 +53,6 @@
 #include "break_jsteg.h"
 #include "db.h"
 
-#define VERSION "0.4"
-
 #ifndef PATH_MAX
 #define PATH_MAX	1024
 #endif

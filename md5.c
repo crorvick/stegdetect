@@ -32,12 +32,12 @@
 #include "md5.h"
 
 /* Little-endian byte-swapping routines.  Note that these do not
-   depend on the size of datatypes such as uint32, nor do they require
+   depend on the size of datatypes such as md5_uint32, nor do they require
    us to detect the endianness of the machine we are running on.  It
    is possible they should be macros for speed, but I would be
    surprised if they were a performance bottleneck for MD5.  */
 
-static uint32
+static md5_uint32
 getu32 (addr)
      const unsigned char *addr;
 {
@@ -47,7 +47,7 @@ getu32 (addr)
 
 static void
 putu32 (data, addr)
-     uint32 data;
+     md5_uint32 data;
      unsigned char *addr;
 {
 	addr[0] = (unsigned char)data;
@@ -83,12 +83,12 @@ MD5Update(ctx, buf, len)
      unsigned char const *buf;
      unsigned len;
 {
-	uint32 t;
+	md5_uint32 t;
 
 	/* Update bitcount */
 
 	t = ctx->bits[0];
-	if ((ctx->bits[0] = (t + ((uint32)len << 3)) & 0xffffffff) < t)
+	if ((ctx->bits[0] = (t + ((md5_uint32)len << 3)) & 0xffffffff) < t)
 		ctx->bits[1]++;	/* Carry from low to high */
 	ctx->bits[1] += len >> 29;
 
@@ -193,11 +193,11 @@ MD5Final(digest, ctx)
  */
 void
 MD5Transform(buf, inraw)
-     uint32 buf[4];
+     md5_uint32 buf[4];
      const unsigned char inraw[64];
 {
-	register uint32 a, b, c, d;
-	uint32 in[16];
+	register md5_uint32 a, b, c, d;
+	md5_uint32 in[16];
 	int i;
 
 	for (i = 0; i < 16; ++i)
