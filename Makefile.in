@@ -8,6 +8,7 @@ prefix		= @prefix@
 exec_prefix	= @exec_prefix@
 bindir		= @bindir@
 mandir		= @mandir@
+datadir		= @datadir@
 
 JPEGDIR		= ./jpeg-6b
 JPEGINC		= -I$(JPEGDIR)
@@ -31,15 +32,22 @@ INSTALL_DATA	= @INSTALL_DATA@
 CSRCS=		common.c jphide_table.c
 DSRCS=		stegdetect.c chi2cdf.c
 DOBJS=		$(DSRCS:.c=.o) $(CSRCS:.c=.o) @LIBOBJS@
+BSRCS=		stegbreak.c break_jphide.c cfg.c rpp.c rules.c bf_skey.c \
+		db.c break_outguess.c break_jsteg.c arc4.c
+XOBJS=		@BFOBJ@
+BOBJS=		$(BSRCS:.c=.o) $(CSRCS:.c=.o) $(XOBJS) @LIBOBJS@
 XSSRCS=		xsteg.c xsteg_xpm.c
 XSOBJS=		$(XSSRCS:.c=.o)
 
-PROGS=		stegdetect @XSTEG@
+PROGS=		stegdetect stegbreak @XSTEG@
 
 all: $(PROGS)
 
 stegdetect: $(JPEGDEP) $(DOBJS)
 	$(CC) $(CFLAGS) $(INCS) -o $@ $(DOBJS) $(LIBS)
+
+stegbreak: $(JPEGDEP) $(BOBJS)
+	$(CC) -static $(CFLAGS) $(INCS) -o $@ $(BOBJS) $(LIBS)
 
 $(XSOBJS):
 	$(CC) $(CFLAGS) $(EVENTINC) $(GTKINC) -c $*.c
@@ -53,6 +61,9 @@ $(JPEGDEP):
 install: all
 	test -d $(install_prefix)$(bindir) || \
 	   $(INSTALL) -d $(install_prefix)$(bindir)
+	test -d $(install_prefix)$(datadir)/stegbreak || \
+	   $(INSTALL) -d $(install_prefix)$(datadir)/stegbreak
+	$(INSTALL_DATA) rules.ini $(install_prefix)$(datadir)/stegbreak
 	for file in $(PROGS); do \
 	   $(INSTALL_PROG) -m 755 $$file $(install_prefix)$(bindir); \
 	done

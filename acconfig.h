@@ -1,3 +1,6 @@
+/* Define to the path where the rules.ini file can be found */
+#undef _PATH_RULES
+
 /* Define to `unsigned long long' if <sys/types.h> doesn't define.  */
 #undef u_int64_t
 

@@ -525,6 +525,12 @@ jpg_open(char *filename)
 
 	fclose(fin);
 
+	if (dctcoeff == NULL) {
+		fprintf(stderr, "%s : error: can not get coefficients\n",
+		    filename);
+		goto out;
+	}
+
 	if (jinfo.out_color_space != JCS_RGB) {
 		fprintf(stderr, "%s : error: is not a RGB image\n", filename);
 		goto out;

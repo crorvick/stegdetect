@@ -41,7 +41,7 @@
 #include "config.h"
 #include "common.h"
 
-#define VERSION "0.2"
+#define VERSION "0.3"
 
 #define DBG_PRINTHIST	0x0001
 #define DBG_CHIDIFF	0x0002
@@ -51,6 +51,7 @@
 #define DBG_CHI		0x0020
 #define DBG_ENDVAL	0x0040
 #define DBG_BINSRCH	0x0080
+#define DBG_PRINTZERO	0x0100
 
 #define FLAG_DOOUTGUESS	0x0001
 #define FLAG_DOJPHIDE	0x0002
@@ -65,6 +66,7 @@ float DCThist[257];
 float scale = 1;		/* Sensitivity scaling */
 
 int debug = 0;
+int quiet = 0;
 
 void
 buildDCThist(short *data, int x, int y)
@@ -499,7 +501,8 @@ histogram_chi_jsteg(short *data, int bits)
 			}
 		}
 
-		if ((debug & DBG_CHI) && f != 0)
+		if ((debug & DBG_CHI) &&
+		    ((debug & DBG_PRINTZERO) || f != 0))
 			fprintf(stdout, "%04f: %8.5f%%\n",
 				i, f * 100);
 	}
@@ -588,7 +591,8 @@ histogram_chi_outguess(short *data, int bits)
 			sum += f;
 		if (f > 0.001)
 			count++;
-		if ((debug & DBG_CHI) && f != 0)
+		if ((debug & DBG_CHI) && 
+		    ((debug & DBG_PRINTZERO) || f != 0))
 			fprintf(stdout, "%04d: %8.5f%%\n", i, f * 100);
 	}
 
@@ -632,7 +636,10 @@ histogram_chi_jphide(short *data, int bits)
 			off = i*bits/100;
 			f = chi2test(data, bits, unify_false_jphide,
 				     0, off);
-			sum += f;
+			if (f > 0.3)
+				sum += f;
+			else if (f < 0.2)
+				break;
 			if ((debug & DBG_CHI) && f != 0)
 				fprintf(stdout, "%04d[:] %8.5f%%\n",
 					i, f * 100);
@@ -655,7 +662,8 @@ histogram_chi_jphide(short *data, int bits)
 		else if (f < 0.2)
 			break;
 
-		if ((debug & DBG_CHI) && f != 0)
+		if ((debug & DBG_CHI) &&
+		    ((debug & DBG_PRINTZERO) || f != 0))
 			fprintf(stdout, "%04d: %8.5f%%\n", i, f * 100);
 	}
 
@@ -904,7 +912,8 @@ detect(char *filename, int scans)
 	if (!flag)
 		strlcat(outbuf, " negative", sizeof(outbuf));
 
-	fprintf(stdout, "%s\n", outbuf);
+	if (flag || !quiet)
+		fprintf(stdout, "%s\n", outbuf);
 
 	jpg_finish();
 	jpg_destroy();
@@ -923,8 +932,11 @@ main(int argc, char *argv[])
 	scans = FLAG_DOOUTGUESS | FLAG_DOJPHIDE | FLAG_DOJSTEG | FLAG_DOINVIS;
 
 	/* read command line arguments */
-	while ((ch = getopt(argc, argv, "s:Vd:t:")) != -1)
+	while ((ch = getopt(argc, argv, "s:Vd:t:q")) != -1)
 		switch((char)ch) {
+		case 'q':
+			quiet = 1;
+			break;
 		case 's':
 			if ((scale = atof(optarg)) == 0) {
 				usage();

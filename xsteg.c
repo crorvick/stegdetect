@@ -79,6 +79,9 @@ GtkWidget *text, *stop, *filemenu_open;
 GtkWidget *clist;
 gint sorttype[2] = {-1, -1};
 
+/* Fileselector memory */
+char stored_dirname[1024];
+
 GdkColormap *cmap;
 GdkColor red, green;
 GtkStyle *default_style, *red_style, *green_style;
@@ -182,11 +185,11 @@ filename_adddir(char *dirname)
 	int off;
 
 	if (strlen(dirname) >= sizeof(fullname) - 2)
-		return (-1);
+		return (0);
 
 	dir = opendir(dirname);
 	if (dir == NULL)
-		return (-1);
+		return (0);
 	strlcpy(fullname, dirname, sizeof(fullname));
 	off = strlen(fullname);
 	if (fullname[off - 1] != '/') {
@@ -291,8 +294,9 @@ open_ok_clicked(GtkWidget *widget, gpointer data)
 {
 	char line[1024];
 	struct stat sb;
-	gchar *name;
-	GtkWidget *questor = data;
+	gchar *name, *text;
+	GtkWidget *questor = data, *entry;
+	int hadtext = 0;
 
 	name = gtk_file_selection_get_filename(GTK_FILE_SELECTION(questor));
 
@@ -301,11 +305,23 @@ open_ok_clicked(GtkWidget *widget, gpointer data)
 		return;
 	}
 
+	entry = GTK_FILE_SELECTION(questor)->selection_entry;
+	text = gtk_entry_get_text(GTK_ENTRY(entry));
+	if (text != NULL && strlen(text))
+		hadtext = 1;
+
 	strlcpy(line, name, sizeof(line));
 	gtk_widget_destroy(questor);
 
 	if (stat(line, &sb) == -1)
 		return;
+
+	if (hadtext) {
+		strlcpy(stored_dirname, dirname(line), sizeof(stored_dirname));
+		strlcat(stored_dirname, "/", sizeof(stored_dirname));
+	} else
+		strlcpy(stored_dirname, line, sizeof(stored_dirname));
+
 
 	adding = 1;
 	gtk_widget_set_sensitive(filemenu_open, FALSE);
@@ -406,6 +422,9 @@ create_file_questor(void)
 	GtkWidget *cancel;
 
 	questor = gtk_file_selection_new ("Select File");
+	if (strlen(stored_dirname))
+		gtk_file_selection_set_filename(GTK_FILE_SELECTION(questor),
+		    stored_dirname);
 	gtk_container_border_width(GTK_CONTAINER (questor), 10);
 	GTK_WINDOW(questor)->type = GTK_WINDOW_DIALOG;
 

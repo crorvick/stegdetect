@@ -10,6 +10,9 @@
    byte first (like Motorola and SPARC, unlike Intel and VAX).  */
 #undef WORDS_BIGENDIAN
 
+/* Define to the path where the rules.ini file can be found */
+#undef _PATH_RULES
+
 /* Define to `unsigned int' if <sys/types.h> doesn't define.  */
 #undef u_int32_t
 

@@ -10,7 +10,7 @@
 .Sh SYNOPSIS
 .\" For a program:  program [-abc] file ...
 .Nm stegdetect
-.Op Fl V
+.Op Fl qV
 .Op Fl s Ar float
 .Op Fl d Ar num
 .Op Fl t Ar tests
@@ -25,6 +25,8 @@ hidden information.
 .Pp
 The options are as follows:
 .Bl -tag -width Ds_tests
+.It Fl q
+Only reports images that are likely to have steganographic content.
 .It Fl V
 Displays the version number of the software.
 .It Fl s Ar float
