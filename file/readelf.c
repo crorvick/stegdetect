@@ -476,11 +476,7 @@ tryelf(fd, buf, nbytes)
 #ifdef ELFCORE
 			dophn_core(class, swap,
 				   fd,
-#ifdef USE_ARRAY_FOR_64BIT_TYPES
-				   getu32(swap, elfhdr.e_phoff[1]),
-#else
 				   getu64(swap, elfhdr.e_phoff),
-#endif
 				   getu16(swap, elfhdr.e_phnum), 
 				   getu16(swap, elfhdr.e_phentsize));
 #else
@@ -491,21 +487,13 @@ tryelf(fd, buf, nbytes)
 			if (getu16(swap, elfhdr.e_type) == ET_EXEC) {
 				dophn_exec(class, swap,
 					   fd,
-#ifdef USE_ARRAY_FOR_64BIT_TYPES
-					   getu32(swap, elfhdr.e_phoff[1]),
-#else
 					   getu64(swap, elfhdr.e_phoff),
-#endif
 					   getu16(swap, elfhdr.e_phnum), 
 					   getu16(swap, elfhdr.e_phentsize));
 			}
 			doshn(class, swap,
 			      fd,
-#ifdef USE_ARRAY_FOR_64BIT_TYPES
-			      getu32(swap, elfhdr.e_shoff[1]),
-#else
 			      getu64(swap, elfhdr.e_shoff),
-#endif
 			      getu16(swap, elfhdr.e_shnum),
 			      getu16(swap, elfhdr.e_shentsize));
 		}

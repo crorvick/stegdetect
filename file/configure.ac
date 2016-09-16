@@ -65,27 +65,12 @@ dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
 AC_TYPE_OFF_T
 AC_TYPE_SIZE_T
+AC_TYPE_UINT8_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
 AC_STRUCT_ST_RDEV
 AC_STRUCT_TIMEZONE_DAYLIGHT
-
-dnl FIXME: only found in standard headers!
-AC_CHECK_TYPE(uint8_t, unsigned char)
-AC_CHECK_TYPE(uint16_t, unsigned short)
-AC_CHECK_TYPE(uint32_t, unsigned int)
-
-AC_C_LONG_LONG
-if test $ac_cv_c_long_long = yes; then
-  long64='unsigned long long';
-else
-  long64='unsigned long';
-fi
-dnl This needs a patch to autoconf 2.13 acgeneral.m4
-AC_CHECK_TYPE2(uint64_t, $long64)
-
-AC_CHECK_SIZEOF_STDC_HEADERS(uint8_t, 0)
-AC_CHECK_SIZEOF_STDC_HEADERS(uint16_t, 0)
-AC_CHECK_SIZEOF_STDC_HEADERS(uint32_t, 0)
-AC_CHECK_SIZEOF_STDC_HEADERS(uint64_t, 0)
 
 dnl Checks for functions
 AC_CHECK_FUNCS(mmap strerror strtoul)

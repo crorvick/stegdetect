@@ -15,16 +15,9 @@ typedef uint16_t	Elf32_Half;
 typedef uint32_t	Elf32_Word;
 typedef uint8_t		Elf32_Char;
 
-#if SIZEOF_UINT64_T != 8
-#define USE_ARRAY_FOR_64BIT_TYPES
-typedef	uint32_t 	Elf64_Addr[2];
-typedef	uint32_t 	Elf64_Off[2];
-typedef uint32_t 	Elf64_Xword[2];
-#else
 typedef	uint64_t 	Elf64_Addr;
 typedef	uint64_t 	Elf64_Off;
 typedef uint64_t 	Elf64_Xword;
-#endif
 typedef uint16_t	Elf64_Half;
 typedef uint32_t	Elf64_Word;
 typedef uint8_t		Elf64_Char;
