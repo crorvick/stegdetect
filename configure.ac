@@ -14,6 +14,7 @@ fi
 dnl Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
+AM_PROG_AS
 AC_C_INLINE
 AC_PROG_INSTALL
 
