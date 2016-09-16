@@ -3,7 +3,7 @@ AC_INIT(stegdetect.c, 0.6, provos@citi.umich.edu)
 AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR(stegdetect.c)
 
-AM_INIT_AUTOMAKE(stegdetect, 0.6)
+AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(config.h)
 
 dnl Initialize prefix.

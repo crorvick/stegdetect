@@ -27,7 +27,7 @@ EXTRA_DIST = $(man_MANS) acconfig.h jpeg-6b bf_locl.h bf_pi.h blowfish.h \
 #CFLAGS	= @CFLAGS@ -Wall -g
 CFLAGS	= -O2 -Wall -g
 
-INCLUDES = $(JPEGINC) $(FILEINC) -I$(srcdir)/compat $(EVENTINC) $(GTKINC)
+AM_CPPFLAGS = $(JPEGINC) $(FILEINC) -I$(srcdir)/compat $(EVENTINC) $(GTKINC)
 
 EXTRA_PROGRAMS = xsteg
 bin_PROGRAMS = stegdetect stegbreak stegcompare stegdeimage @XSTEG@
