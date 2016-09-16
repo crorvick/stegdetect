@@ -50,7 +50,7 @@ AC_CACHE_CHECK([for tm_isdst in struct tm], ac_cv_struct_tm_isdst,
 #include <$ac_cv_struct_tm>], [struct tm tm; tm.tm_isdst;],
   ac_cv_struct_tm_isdst=yes, ac_cv_struct_tm_isdst=no)])
 if test "$ac_cv_struct_tm_isdst" = yes; then
-  AC_DEFINE(HAVE_TM_ISDST)
+  AC_DEFINE(HAVE_TM_ISDST, 1, [Define if you have tm_isdst])
 fi
 AC_CACHE_CHECK(for daylight, ac_cv_var_daylight,
 [AC_TRY_LINK(
@@ -62,7 +62,7 @@ extern int daylight;
 changequote([, ])dnl
 [atoi(daylight);], ac_cv_var_daylight=yes, ac_cv_var_daylight=no)])
   if test $ac_cv_var_daylight = yes; then
-    AC_DEFINE(HAVE_DAYLIGHT)
+    AC_DEFINE(HAVE_DAYLIGHT, 1, [Define if you have daylight])
   fi
 ])
 

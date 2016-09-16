@@ -139,12 +139,12 @@ AC_EGREP_CPP(yes,
 #ifdef timeradd
 yes
 #endif
-],      [ AC_DEFINE(HAVE_TIMERADD)
+],      [ AC_DEFINE(HAVE_TIMERADD, 1, [Is timeradd defined in sys/time.h])
           AC_MSG_RESULT([yes])], AC_MSG_RESULT([no])
 )
 
 dnl Other stuff
-AC_DEFINE_UNQUOTED(_PATH_RULES, "$prefix/share/stegbreak/rules.ini")
+AC_DEFINE_UNQUOTED(_PATH_RULES, "$prefix/share/stegbreak/rules.ini", [Path to rules config])
 AC_C_BIGENDIAN
 
 AC_CONFIG_SUBDIRS(jpeg-6b file)
